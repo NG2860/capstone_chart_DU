@@ -18,6 +18,10 @@
       box-shadow: 0 1px 4px rgba(0,0,0,.06);
     }
     .logo { font-weight: 700; font-size: 15px; color: #534AB7; }
+    .file-count {
+      font-size: 11px; background: #EEEDFE; color: #534AB7;
+      padding: 3px 10px; border-radius: 20px; font-weight: 500;
+    }
     .quota {
       margin-left: auto; font-size: 11px;
       background: #E1F5EE; color: #085041;
@@ -27,10 +31,9 @@
     /* ── Layout ── */
     .body {
       display: grid;
-      grid-template-columns: 220px 1fr 280px;
+      grid-template-columns: 240px 1fr 280px;
       gap: 0; height: calc(100vh - 48px); overflow: hidden;
     }
-
     .sidebar, .right {
       background: #fafafa; padding: 14px;
       overflow-y: auto; border-right: 1px solid #eee;
@@ -38,55 +41,89 @@
     .right { border-right: none; border-left: 1px solid #eee; }
     .main { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 
-    /* ── Section label ── */
-    .label { font-size: 11px; color: #888; margin-bottom: 8px; font-weight: 500; }
+    /* ── Labels ── */
+    .label { font-size: 11px; color: #888; margin-bottom: 6px; font-weight: 500; }
 
     /* ── Upload zone ── */
     .upload-zone {
       border: 2px dashed #AFA9EC; border-radius: 10px;
-      padding: 20px 10px; text-align: center; cursor: pointer;
+      padding: 16px 10px; text-align: center; cursor: pointer;
       background: #EEEDFE; transition: background .2s;
     }
-    .upload-zone:hover { background: #dddcfc; }
-    .upload-zone .icon { font-size: 22px; margin-bottom: 4px; }
-    .upload-zone .txt { font-size: 12px; color: #534AB7; font-weight: 600; }
-    .upload-zone .sub { font-size: 10px; color: #888; margin-top: 3px; }
+    .upload-zone:hover, .upload-zone.drag-over { background: #dddcfc; }
+    .upload-zone .icon { font-size: 20px; margin-bottom: 3px; }
+    .upload-zone .txt  { font-size: 12px; color: #534AB7; font-weight: 600; }
+    .upload-zone .sub  { font-size: 10px; color: #888; margin-top: 2px; }
 
-    /* ── Card ── */
-    .card {
-      background: #fff; border: 1px solid #eee;
-      border-radius: 10px; padding: 14px;
+    /* ── File list ── */
+    .file-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+    .file-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 9px; border-radius: 8px; cursor: pointer;
+      border: 1px solid #eee; background: #fff;
+      transition: all .15s; position: relative;
     }
-    .card-title { font-size: 12px; font-weight: 600; color: #333; margin-bottom: 10px; }
+    .file-item:hover   { border-color: #AFA9EC; background: #f7f6ff; }
+    .file-item.active  { border-color: #534AB7; background: #EEEDFE; }
+    .file-item .f-icon { font-size: 14px; flex-shrink: 0; }
+    .file-item .f-name {
+      font-size: 11px; font-weight: 500; color: #333;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+    }
+    .file-item.active .f-name { color: #3C3489; }
+    .file-item .f-rows { font-size: 9px; color: #aaa; flex-shrink: 0; }
+    .file-item .f-del  {
+      font-size: 12px; color: #bbb; flex-shrink: 0;
+      display: none; cursor: pointer; padding: 0 2px;
+    }
+    .file-item:hover .f-del { display: block; }
+    .file-item .f-del:hover { color: #E24B4A; }
 
-    /* ── Tags ── */
-    .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
-    .tag {
-      font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500;
+    /* ── Upload progress ── */
+    .upload-progress {
+      font-size: 10px; color: #534AB7; text-align: center;
+      padding: 4px; display: none;
     }
+
+    /* ── Column tags ── */
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+    .tag  { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
     .tag-numeric     { background: #EEEDFE; color: #3C3489; }
     .tag-categorical { background: #E1F5EE; color: #085041; }
     .tag-date        { background: #FAEEDA; color: #633806; }
 
-    /* ── Table ── */
+    /* ── Preview table ── */
     .preview-wrap { overflow-x: auto; }
     table { width: 100%; font-size: 10px; border-collapse: collapse; }
     th { padding: 4px 6px; background: #f5f5f5; text-align: left; border-bottom: 1px solid #eee; white-space: nowrap; }
     td { padding: 3px 6px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; color: #333; }
+
+    /* ── Card ── */
+    .card { background: #fff; border: 1px solid #eee; border-radius: 10px; padding: 14px; }
+    .card-title { font-size: 12px; font-weight: 600; color: #333; margin-bottom: 10px; }
+
+    /* ── No file selected placeholder ── */
+    .no-file {
+      height: 200px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #bbb; font-size: 13px; gap: 8px;
+      border: 1px dashed #eee; border-radius: 10px; background: #fff;
+    }
+    .no-file .big { font-size: 32px; }
 
     /* ── Chart type buttons ── */
     .type-btns { display: flex; gap: 6px; margin-bottom: 10px; }
     .type-btn {
       flex: 1; padding: 6px 0; font-size: 11px; border-radius: 6px;
       border: 1px solid #ddd; background: #fff; color: #666;
-      cursor: pointer; font-weight: 400; transition: all .15s;
+      cursor: pointer; transition: all .15s;
     }
     .type-btn.active {
       border: 2px solid #534AB7; background: #EEEDFE;
       color: #3C3489; font-weight: 600;
     }
 
-    /* ── Selects ── */
+    /* ── Axis selects ── */
     .axis-row { display: flex; gap: 8px; margin-bottom: 12px; }
     .axis-group { flex: 1; }
     .axis-group label { font-size: 10px; color: #888; display: block; margin-bottom: 3px; }
@@ -95,7 +132,7 @@
       border-radius: 6px; border: 1px solid #ddd; background: #fff;
     }
 
-    /* ── Empty chart placeholder ── */
+    /* ── Chart area ── */
     .chart-empty {
       height: 160px; display: flex; align-items: center;
       justify-content: center; color: #aaa; font-size: 12px;
@@ -103,22 +140,32 @@
     }
     canvas { max-height: 260px; }
 
+    /* ── Compare mode ── */
+    .compare-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; background: #FAEEDA; border: 1px solid #f4c97a;
+      border-radius: 8px; font-size: 11px; color: #633806;
+    }
+    .compare-bar strong { font-weight: 600; }
+    .compare-btn {
+      margin-left: auto; font-size: 10px; padding: 3px 10px;
+      border-radius: 6px; border: 1px solid #f4a12e;
+      background: #fff; color: #633806; cursor: pointer;
+    }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .compare-card { border: 1px solid #eee; border-radius: 8px; padding: 10px; background: #fff; }
+    .compare-card h4 { font-size: 11px; color: #534AB7; margin-bottom: 6px; font-weight: 600; }
+
     /* ── AI panel ── */
     .ai-dot { width: 8px; height: 8px; border-radius: 50%; background: #0F6E56; display: inline-block; margin-right: 6px; }
-    .ai-card {
-      border: 1px solid #eee; border-radius: 10px;
-      padding: 10px 12px; background: #fff; margin-bottom: 8px;
-    }
+    .ai-card { border: 1px solid #eee; border-radius: 10px; padding: 10px 12px; background: #fff; margin-bottom: 8px; }
     .ai-card.best { border: 2px solid #534AB7; background: #EEEDFE; }
     .ai-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    .ai-card-type { font-size: 11px; font-weight: 600; color: #3C3489; }
+    .ai-card-type        { font-size: 11px; font-weight: 600; color: #3C3489; }
     .ai-card-type-normal { font-size: 11px; font-weight: 500; color: #333; }
-    .badge {
-      font-size: 9px; background: #534AB7; color: #fff;
-      padding: 2px 7px; border-radius: 20px; font-weight: 600;
-    }
+    .badge { font-size: 9px; background: #534AB7; color: #fff; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
     .ai-reason { font-size: 11px; color: #666; line-height: 1.5; }
-    .ai-score { font-size: 10px; color: #aaa; margin-top: 3px; }
+    .ai-score  { font-size: 10px; color: #aaa; margin-top: 3px; }
 
     /* ── Buttons ── */
     .btn {
@@ -131,46 +178,29 @@
     .btn-green { background: #0F6E56; color: #fff; }
     .btn-green:hover { background: #085041; }
     .btn-green:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-outline {
+      background: #fff; color: #534AB7; border: 1.5px solid #534AB7;
+      padding: 7px 0; border-radius: 8px; font-size: 11px;
+      font-weight: 600; cursor: pointer; width: 100%; transition: all .15s;
+    }
+    .btn-outline:hover { background: #EEEDFE; }
 
     /* ── Story panel ── */
     .insight-row { display: flex; gap: 6px; margin-bottom: 8px; }
-    .insight-card {
-      flex: 1; border-radius: 8px; padding: 8px 6px; text-align: center;
-    }
-    .insight-val { font-size: 12px; font-weight: 600; }
-    .insight-lbl { font-size: 10px; margin-top: 2px; opacity: .8; }
-    .story-box {
-      background: #E1F5EE; border: 1px solid #9FE1CB;
-      border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
-    }
+    .insight-card { flex: 1; border-radius: 8px; padding: 8px 6px; text-align: center; }
+    .insight-val  { font-size: 12px; font-weight: 600; }
+    .insight-lbl  { font-size: 10px; margin-top: 2px; opacity: .8; }
+    .story-box { background: #E1F5EE; border: 1px solid #9FE1CB; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
     .story-box h4 { font-size: 11px; font-weight: 600; color: #085041; margin-bottom: 5px; }
     .story-box p  { font-size: 12px; color: #333; line-height: 1.7; }
-    .reco-box {
-      font-size: 11px; color: #534AB7; background: #EEEDFE;
-      border: 1px solid #AFA9EC; border-radius: 6px;
-      padding: 7px 10px; display: flex; gap: 6px;
-    }
+    .reco-box { font-size: 11px; color: #534AB7; background: #EEEDFE; border: 1px solid #AFA9EC; border-radius: 6px; padding: 7px 10px; display: flex; gap: 6px; }
     .reco-box strong { font-weight: 600; flex-shrink: 0; }
 
-    /* ── Error ── */
-    .error-box {
-      font-size: 11px; color: #A32D2D; background: #FCEBEB;
-      padding: 7px 10px; border-radius: 6px; margin-bottom: 8px;
-    }
-
-    /* ── Divider ── */
+    /* ── Misc ── */
+    .error-box { font-size: 11px; color: #A32D2D; background: #FCEBEB; padding: 7px 10px; border-radius: 6px; margin-top: 6px; }
     .divider { border-top: 1px solid #eee; margin: 8px 0; }
-
-    /* ── Spinner ── */
     .spin { display: inline-block; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── File name display ── */
-    .file-info {
-      font-size: 10px; color: #534AB7; background: #EEEDFE;
-      padding: 4px 8px; border-radius: 6px; margin-top: 6px;
-      word-break: break-all;
-    }
   </style>
 </head>
 <body>
@@ -178,24 +208,31 @@
 <!-- Topbar -->
 <div class="topbar">
   <span class="logo">📊 스마트 차트 빌더</span>
+  <span class="file-count" id="file-count">파일 0개</span>
   <span class="quota" id="quota-badge">AI 잔여: 2회</span>
 </div>
 
-<!-- Main layout -->
 <div class="body">
 
   <!-- ── Sidebar ── -->
   <div class="sidebar">
     <div class="label">데이터 소스</div>
+
+    <!-- Upload zone -->
     <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
       <div class="icon">📂</div>
-      <div class="txt">+ 파일 업로드</div>
-      <div class="sub">CSV / Excel / JSON</div>
+      <div class="txt">+ 파일 추가</div>
+      <div class="sub">CSV / Excel / JSON · 여러 파일 가능</div>
     </div>
-    <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.json" style="display:none" />
-    <div id="file-info-box"></div>
+    <div class="upload-progress" id="upload-progress">⏳ 업로드 중...</div>
+    <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.json" multiple style="display:none" />
+
+    <!-- File list -->
+    <div class="file-list" id="file-list"></div>
+
     <div id="col-section" style="display:none; margin-top:12px;">
-      <div class="label">컬럼 정보</div>
+      <div class="divider"></div>
+      <div class="label" id="active-file-label"></div>
       <div class="tags" id="col-tags"></div>
       <div class="label">미리보기 (상위 5행)</div>
       <div class="preview-wrap"><table id="preview-table"></table></div>
@@ -203,25 +240,219 @@
   </div>
 
   <!-- ── Main ── -->
-  <div class="main">
+  <div class="main" id="main-area">
+    <div class="no-file">
+      <span class="big">📂</span>
+      <span>파일을 업로드하면 차트를 만들 수 있습니다</span>
+    </div>
+  </div>
 
-    <!-- Manual chart card -->
-    <div class="card">
-      <div class="card-title">수동 모드 — 차트 설정</div>
+  <!-- ── Right: AI panel ── -->
+  <div class="right">
+    <div style="display:flex; align-items:center; margin-bottom:10px;">
+      <span class="ai-dot"></span>
+      <span style="font-size:12px; font-weight:600;">AI 추천 결과</span>
+    </div>
+    <div id="ai-charts"></div>
+    <div class="divider"></div>
+    <button class="btn btn-purple" id="ai-btn" onclick="runAiRecommend()">AI 차트 추천 실행</button>
+    <div id="ai-error"></div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000'
+
+// State 
+// fileStore[id] = { id, name, file, columns, preview, summary, rows }
+const fileStore = {}
+let activeId    = null
+let chartInstance = null
+let currentType   = 'bar'
+let chartConfig   = null
+
+// Helpers 
+function uid() { return Math.random().toString(36).slice(2, 8) }
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase()
+  if (ext === 'csv')  return '📄'
+  if (ext === 'json') return '📋'
+  return '📊'
+}
+
+// Upload 
+const dropZone = document.getElementById('drop-zone')
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over') })
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'))
+dropZone.addEventListener('drop', e => {
+  e.preventDefault()
+  dropZone.classList.remove('drag-over')
+  uploadFiles([...e.dataTransfer.files])
+})
+document.getElementById('file-input').addEventListener('change', e => {
+  uploadFiles([...e.target.files])
+  e.target.value = ''
+})
+
+async function uploadFiles(files) {
+  if (!files.length) return
+  const prog = document.getElementById('upload-progress')
+  prog.style.display = 'block'
+  prog.textContent = `⏳ ${files.length}개 파일 업로드 중...`
+
+  for (const file of files) {
+    // 중복 파일명 체크
+    const isDup = Object.values(fileStore).some(f => f.name === file.name)
+    if (isDup) {
+      prog.textContent = `⚠️ "${file.name}" 이미 업로드됨 — 건너뜀`
+      await new Promise(r => setTimeout(r, 1200))
+      continue
+    }
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await axios.post(`${API}/api/upload`, fd)
+      const id  = uid()
+      fileStore[id] = {
+        id,
+        name:    file.name,
+        file:    file,
+        columns: res.data.columns,
+        preview: res.data.preview,
+        summary: res.data.summary || {},
+        rows:    res.data.rows,
+      }
+      renderFileList()
+      switchFile(id)
+    } catch (e) {
+      alert(`"${file.name}" 업로드 실패: ` + (e.response?.data?.detail || e.message))
+    }
+  }
+  prog.style.display = 'none'
+}
+
+// ── File list rendering 
+function renderFileList() {
+  const count = Object.keys(fileStore).length
+  document.getElementById('file-count').textContent = `파일 ${count}개`
+
+  const list = document.getElementById('file-list')
+  list.innerHTML = Object.values(fileStore).map(f => `
+    <div class="file-item ${f.id === activeId ? 'active' : ''}"
+         id="fi-${f.id}" onclick="switchFile('${f.id}')">
+      <span class="f-icon">${fileIcon(f.name)}</span>
+      <span class="f-name" title="${f.name}">${f.name}</span>
+      <span class="f-rows">${f.rows}행</span>
+      <span class="f-del" onclick="deleteFile(event,'${f.id}')">✕</span>
+    </div>
+  `).join('')
+}
+
+// ── Switch active file 
+function switchFile(id) {
+  activeId = id
+  const f  = fileStore[id]
+  if (!f) return
+
+  renderFileList()
+
+  // Sidebar info
+  document.getElementById('active-file-label').textContent = `📄 ${f.name} (${f.rows}행)`
+  document.getElementById('col-section').style.display = 'block'
+  renderColumns(f.columns)
+  renderPreview(f.columns, f.preview)
+
+  // Rebuild main area
+  renderMainArea(f)
+}
+
+// Delete file
+function deleteFile(e, id) {
+  e.stopPropagation()
+  delete fileStore[id]
+
+  if (activeId === id) {
+    activeId = null
+    chartInstance?.destroy()
+    chartInstance = null
+    chartConfig   = null
+
+    const remaining = Object.keys(fileStore)
+    if (remaining.length) {
+      switchFile(remaining[remaining.length - 1])
+    } else {
+      document.getElementById('col-section').style.display  = 'none'
+      document.getElementById('main-area').innerHTML =
+        `<div class="no-file"><span class="big">📂</span><span>파일을 업로드하면 차트를 만들 수 있습니다</span></div>`
+    }
+  }
+  renderFileList()
+}
+
+// Column tags 
+function renderColumns(columns) {
+  document.getElementById('col-tags').innerHTML = columns.map(c => {
+    const cls = c.type === 'numeric' ? 'tag-numeric'
+              : c.type === 'date'    ? 'tag-date' : 'tag-categorical'
+    return `<span class="tag ${cls}">${c.name}</span>`
+  }).join('')
+}
+
+// Preview table
+function renderPreview(columns, preview) {
+  const thead = `<thead><tr>${columns.map(c => `<th>${c.name}</th>`).join('')}</tr></thead>`
+  const tbody = `<tbody>${preview.map(row =>
+    `<tr>${columns.map(c => `<td>${row[c.name] ?? ''}</td>`).join('')}</tr>`
+  ).join('')}</tbody>`
+  document.getElementById('preview-table').innerHTML = thead + tbody
+}
+
+// ── Main area 
+function renderMainArea(f) {
+  chartInstance?.destroy()
+  chartInstance = null
+  chartConfig   = null
+
+  const numericCols = f.columns.filter(c => c.type === 'numeric')
+  const compareOptions = Object.values(fileStore).filter(x => x.id !== f.id)
+
+  document.getElementById('main-area').innerHTML = `
+    <!-- Compare bar (shown when >1 file) -->
+    ${Object.keys(fileStore).length > 1 ? `
+    <div class="compare-bar">
+      <strong>📊 비교 모드:</strong>
+      <span>다른 파일과 비교하기</span>
+      <select id="compare-select" style="font-size:11px; padding:3px 6px; border-radius:6px; border:1px solid #f4a12e; background:#fff;">
+        <option value="">파일 선택...</option>
+        ${compareOptions.map(x => `<option value="${x.id}">${x.name}</option>`).join('')}
+      </select>
+      <button class="compare-btn" onclick="runCompare()">비교</button>
+    </div>` : ''}
+
+    <!-- Manual chart -->
+    <div class="card" id="manual-card">
+      <div class="card-title">수동 모드 — 차트 설정 <span style="font-size:10px;color:#aaa;font-weight:400;">(${f.name})</span></div>
       <div class="type-btns">
-        <button class="type-btn active" data-type="bar">막대</button>
-        <button class="type-btn" data-type="line">꺾은선</button>
-        <button class="type-btn" data-type="pie">원형</button>
-        <button class="type-btn" data-type="scatter">산점도</button>
+        <button class="type-btn ${currentType==='bar'?'active':''}"     data-type="bar">막대</button>
+        <button class="type-btn ${currentType==='line'?'active':''}"    data-type="line">꺾은선</button>
+        <button class="type-btn ${currentType==='pie'?'active':''}"     data-type="pie">원형</button>
+        <button class="type-btn ${currentType==='scatter'?'active':''}" data-type="scatter">산점도</button>
       </div>
       <div class="axis-row">
         <div class="axis-group">
           <label>X축</label>
-          <select id="x-axis"><option value="">선택</option></select>
+          <select id="x-axis">
+            <option value="">선택</option>
+            ${f.columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+          </select>
         </div>
         <div class="axis-group">
           <label>Y축 (숫자형)</label>
-          <select id="y-axis"><option value="">선택</option></select>
+          <select id="y-axis">
+            <option value="">선택</option>
+            ${numericCols.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+          </select>
         </div>
       </div>
       <div id="chart-area">
@@ -229,7 +460,7 @@
       </div>
     </div>
 
-    <!-- Story panel card -->
+    <!-- Story panel -->
     <div class="card" id="story-card" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <div style="display:flex; align-items:center;">
@@ -243,121 +474,29 @@
       <div id="story-result" style="margin-top:10px;"></div>
     </div>
 
-  </div>
+    <!-- Compare result -->
+    <div id="compare-result"></div>
+  `
 
-  <!-- ── Right: AI panel ── -->
-  <div class="right">
-    <div style="display:flex; align-items:center; margin-bottom:10px;">
-      <span class="ai-dot"></span>
-      <span style="font-size:12px; font-weight:600;">AI 추천 결과</span>
-    </div>
-    <div id="ai-charts"></div>
-    <div class="divider"></div>
-    <button class="btn btn-purple" id="ai-btn" onclick="runAiRecommend()">AI 차트 추천 실행</button>
-  </div>
-</div>
-
-<script>
-const API = 'http://localhost:8000'
-
-let uploadedFile = null
-let columns = []
-let preview = []
-let dataSummary = {}
-let chartConfig = null
-let chartInstance = null
-let currentChartType = 'bar'
-
-// ── Upload ──────────────────────────────────────────────────
-
-const dropZone = document.getElementById('drop-zone')
-dropZone.addEventListener('dragover', e => e.preventDefault())
-dropZone.addEventListener('drop', e => {
-  e.preventDefault()
-  const f = e.dataTransfer.files[0]
-  if (f) handleFile(f)
-})
-document.getElementById('file-input').addEventListener('change', e => {
-  if (e.target.files[0]) handleFile(e.target.files[0])
-})
-
-async function handleFile(file) {
-  uploadedFile = file
-  document.getElementById('file-info-box').innerHTML =
-    `<div class="file-info">📄 ${file.name}</div>`
-
-  const fd = new FormData()
-  fd.append('file', file)
-  try {
-    const res = await axios.post(`${API}/api/upload`, fd)
-    columns = res.data.columns
-    preview = res.data.preview
-    dataSummary = res.data.summary || {}
-    renderColumns()
-    renderPreview()
-    renderAxisSelects()
-    document.getElementById('col-section').style.display = 'block'
-  } catch (e) {
-    alert('업로드 실패: ' + (e.response?.data?.detail || e.message))
-  }
-}
-
-// ── Column tags ──────────────────────────────────────────────
-
-function renderColumns() {
-  const container = document.getElementById('col-tags')
-  container.innerHTML = columns.map(c => {
-    const cls = c.type === 'numeric' ? 'tag-numeric'
-              : c.type === 'date'    ? 'tag-date'
-              : 'tag-categorical'
-    return `<span class="tag ${cls}">${c.name}</span>`
-  }).join('')
-}
-
-// ── Preview table ──────────────────────────────────────────
-
-function renderPreview() {
-  const tbl = document.getElementById('preview-table')
-  const thead = `<thead><tr>${columns.map(c =>
-    `<th>${c.name}</th>`).join('')}</tr></thead>`
-  const tbody = `<tbody>${preview.map(row =>
-    `<tr>${columns.map(c =>
-      `<td>${row[c.name] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`
-  tbl.innerHTML = thead + tbody
-}
-
-// ── Axis selects ──────────────────────────────────────────
-
-function renderAxisSelects() {
-  const xSel = document.getElementById('x-axis')
-  const ySel = document.getElementById('y-axis')
-  const numericCols = columns.filter(c => c.type === 'numeric')
-
-  xSel.innerHTML = '<option value="">선택</option>' +
-    columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('')
-  ySel.innerHTML = '<option value="">선택</option>' +
-    numericCols.map(c => `<option value="${c.name}">${c.name}</option>`).join('')
-}
-
-document.getElementById('x-axis').addEventListener('change', tryRenderChart)
-document.getElementById('y-axis').addEventListener('change', tryRenderChart)
-
-// ── Chart type buttons ────────────────────────────────────
-
-document.querySelectorAll('.type-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    currentChartType = btn.dataset.type
-    tryRenderChart()
+  // Bind events
+  document.querySelectorAll('.type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentType = btn.dataset.type
+      document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      tryRenderChart()
+    })
   })
-})
+  document.getElementById('x-axis').addEventListener('change', tryRenderChart)
+  document.getElementById('y-axis').addEventListener('change', tryRenderChart)
+}
 
-// ── Chart rendering ───────────────────────────────────────
-
+// ── Chart rendering ───────────────────────────────────────────
 function tryRenderChart() {
-  const x = document.getElementById('x-axis').value
-  const y = document.getElementById('y-axis').value
+  const f = fileStore[activeId]
+  if (!f) return
+  const x    = document.getElementById('x-axis').value
+  const y    = document.getElementById('y-axis').value
   const area = document.getElementById('chart-area')
 
   if (!x || !y) {
@@ -366,63 +505,129 @@ function tryRenderChart() {
     return
   }
 
-  chartConfig = { type: currentChartType, xAxis: x, yAxis: y, title: `${x}별 ${y}` }
+  chartConfig = { type: currentType, xAxis: x, yAxis: y, title: `${x}별 ${y}` }
   document.getElementById('story-card').style.display = 'block'
-  document.getElementById('story-result').innerHTML = ''
+  document.getElementById('story-result').innerHTML   = ''
 
-  // Build data from preview
-  let labels, data
-  if (currentChartType === 'pie') {
-    labels = preview.map(r => String(r[x] ?? ''))
-    data = preview.map(r => Number(r[y]) || 0)
-  } else if (currentChartType === 'scatter') {
-    labels = []
-    data = preview.map(r => ({ x: Number(r[x]) || 0, y: Number(r[y]) || 0 }))
-  } else {
-    labels = preview.map(r => String(r[x] ?? ''))
-    data = preview.map(r => Number(r[y]) || 0)
-  }
-
+  const { labels, data } = buildChartData(f.preview, x, y, currentType)
   area.innerHTML = '<canvas id="my-chart" style="max-height:260px;"></canvas>'
   if (chartInstance) chartInstance.destroy()
-  const ctx = document.getElementById('my-chart').getContext('2d')
-  chartInstance = new Chart(ctx, {
-    type: currentChartType,
+  chartInstance = buildChart('my-chart', currentType, labels, data, y)
+}
+
+function buildChartData(preview, x, y, type) {
+  if (type === 'scatter') {
+    return { labels: [], data: preview.map(r => ({ x: Number(r[x]) || 0, y: Number(r[y]) || 0 })) }
+  }
+  return {
+    labels: preview.map(r => String(r[x] ?? '')),
+    data:   preview.map(r => Number(r[y]) || 0),
+  }
+}
+
+function buildChart(canvasId, type, labels, data, label) {
+  const ctx = document.getElementById(canvasId).getContext('2d')
+  return new Chart(ctx, {
+    type,
     data: {
       labels,
       datasets: [{
-        label: y,
+        label,
         data,
-        backgroundColor: currentChartType === 'pie'
-          ? ['#7F77DD','#0F6E56','#E24B4A','#F4A12E','#AFA9EC','#9FE1CB']
+        backgroundColor: type === 'pie'
+          ? ['#7F77DD','#0F6E56','#E24B4A','#F4A12E','#AFA9EC','#9FE1CB','#534AB7']
           : '#7F77DD',
         borderColor: '#534AB7',
         borderWidth: 1.5,
       }],
     },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: true } },
-    },
+    options: { responsive: true, plugins: { legend: { display: true } } },
   })
 }
 
-// ── AI Recommend ──────────────────────────────────────────
+// ── Compare mode ──────────────────────────────────────────────
+function runCompare() {
+  const compareId = document.getElementById('compare-select')?.value
+  if (!compareId) { alert('비교할 파일을 선택하세요.'); return }
 
+  const fA = fileStore[activeId]
+  const fB = fileStore[compareId]
+  if (!fA || !fB) return
+
+  const x = document.getElementById('x-axis').value
+  const y = document.getElementById('y-axis').value
+  if (!x || !y) { alert('먼저 X축과 Y축을 선택하세요.'); return }
+
+  // Check both files have the required columns
+  const bHasX = fB.columns.some(c => c.name === x)
+  const bHasY = fB.columns.some(c => c.name === y)
+
+  const result = document.getElementById('compare-result')
+  result.innerHTML = `
+    <div class="card">
+      <div class="card-title">📊 비교 모드 — ${x}별 ${y}</div>
+      <div class="compare-grid">
+        <div class="compare-card">
+          <h4>${fA.name}</h4>
+          <canvas id="chart-A" style="max-height:200px;"></canvas>
+        </div>
+        <div class="compare-card">
+          <h4>${fB.name}</h4>
+          ${bHasX && bHasY
+            ? `<canvas id="chart-B" style="max-height:200px;"></canvas>`
+            : `<div style="height:160px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:12px;">이 파일에는<br>"${!bHasX?x:y}" 컬럼이 없습니다</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `
+
+  const { labels: lA, data: dA } = buildChartData(fA.preview, x, y, currentType)
+  buildChart('chart-A', currentType, lA, dA, `${fA.name} · ${y}`)
+
+  if (bHasX && bHasY) {
+    const { labels: lB, data: dB } = buildChartData(fB.preview, x, y, currentType)
+    const ctxB = document.getElementById('chart-B').getContext('2d')
+    new Chart(ctxB, {
+      type: currentType,
+      data: {
+        labels: lB,
+        datasets: [{
+          label: `${fB.name} · ${y}`,
+          data: dB,
+          backgroundColor: currentType === 'pie'
+            ? ['#0F6E56','#E24B4A','#F4A12E','#534AB7','#9FE1CB']
+            : '#0F6E56',
+          borderColor: '#085041',
+          borderWidth: 1.5,
+        }],
+      },
+      options: { responsive: true, plugins: { legend: { display: true } } },
+    })
+  }
+
+  result.scrollIntoView({ behavior: 'smooth' })
+}
+
+// ── AI Recommend ──────────────────────────────────────────────
 async function runAiRecommend() {
-  if (!uploadedFile) { alert('먼저 파일을 업로드하세요.'); return }
+  const f = fileStore[activeId]
+  if (!f) { alert('먼저 파일을 선택하세요.'); return }
+
   const btn = document.getElementById('ai-btn')
   btn.disabled = true
   btn.innerHTML = '<span class="spin">⏳</span> 분석 중...'
+  document.getElementById('ai-error').innerHTML = ''
 
   const fd = new FormData()
-  fd.append('file', uploadedFile)
+  fd.append('file', f.file)
   try {
     const res = await axios.post(`${API}/api/ai-recommend`, fd)
     renderAiCharts(res.data.charts)
     document.getElementById('quota-badge').textContent = `AI 잔여: ${res.data.remaining}회`
   } catch (e) {
-    alert(e.response?.data?.detail || 'AI 추천 오류 발생')
+    document.getElementById('ai-error').innerHTML =
+      `<div class="error-box">${e.response?.data?.detail || 'AI 추천 오류 발생'}</div>`
   } finally {
     btn.disabled = false
     btn.textContent = 'AI 차트 추천 실행'
@@ -430,8 +635,7 @@ async function runAiRecommend() {
 }
 
 function renderAiCharts(charts) {
-  const container = document.getElementById('ai-charts')
-  container.innerHTML = charts.map((c, i) => `
+  document.getElementById('ai-charts').innerHTML = charts.map((c, i) => `
     <div class="ai-card ${i === 0 ? 'best' : ''}">
       <div class="ai-card-header">
         <span class="${i === 0 ? 'ai-card-type' : 'ai-card-type-normal'}">${c.type} 차트</span>
@@ -443,14 +647,15 @@ function renderAiCharts(charts) {
   `).join('')
 }
 
-// ── Storytelling ──────────────────────────────────────────
-
+// ── Storytelling ──────────────────────────────────────────────
 async function generateStory() {
-  if (!chartConfig) return
+  const f = fileStore[activeId]
+  if (!chartConfig || !f) return
+
   const btn = document.getElementById('story-btn')
   btn.disabled = true
   btn.innerHTML = '<span class="spin">⏳</span> 스토리 생성 중...'
-  document.getElementById('story-error').innerHTML = ''
+  document.getElementById('story-error').innerHTML  = ''
   document.getElementById('story-result').innerHTML = ''
 
   try {
@@ -459,14 +664,14 @@ async function generateStory() {
       x_column:     chartConfig.xAxis,
       y_column:     chartConfig.yAxis,
       title:        chartConfig.title,
-      data_summary: dataSummary,
-      sample_data:  preview.slice(0, 5),
+      data_summary: f.summary,
+      sample_data:  f.preview.slice(0, 5),
       language:     'ko',
     })
     renderStory(res.data)
   } catch (e) {
     document.getElementById('story-error').innerHTML =
-      `<div class="error-box" style="margin-top:8px;">스토리 생성 실패. 다시 시도해주세요.</div>`
+      `<div class="error-box">스토리 생성 실패. 다시 시도해주세요.</div>`
   } finally {
     btn.disabled = false
     btn.textContent = 'AI 스토리 생성'
@@ -480,17 +685,15 @@ const INSIGHT_COLORS = {
 }
 
 function renderStory(data) {
-  const result = document.getElementById('story-result')
   const insights = (data.insights || []).map(ins => {
     const c = INSIGHT_COLORS[ins.type] || INSIGHT_COLORS.neutral
-    return `
-      <div class="insight-card" style="background:${c.bg}; border:1px solid ${c.border};">
-        <div class="insight-val" style="color:${c.text};">${ins.value}</div>
-        <div class="insight-lbl" style="color:${c.text};">${ins.label}</div>
-      </div>`
+    return `<div class="insight-card" style="background:${c.bg};border:1px solid ${c.border};">
+      <div class="insight-val" style="color:${c.text};">${ins.value}</div>
+      <div class="insight-lbl" style="color:${c.text};">${ins.label}</div>
+    </div>`
   }).join('')
 
-  result.innerHTML = `
+  document.getElementById('story-result').innerHTML = `
     <div class="insight-row">${insights}</div>
     <div class="story-box">
       <h4>데이터 스토리</h4>
@@ -498,8 +701,7 @@ function renderStory(data) {
     </div>
     ${data.recommendation ? `
     <div class="reco-box">
-      <strong>권고:</strong>
-      <span>${data.recommendation}</span>
+      <strong>권고:</strong><span>${data.recommendation}</span>
     </div>` : ''}
   `
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
 
-const API = 'http://localhost:8000'
+const API = ''  // Vite proxy
 
 const INSIGHT_COLORS = {
   positive: { bg: '#E1F5EE', text: '#085041', border: '#9FE1CB' },
@@ -21,7 +21,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
       const res = await axios.post(`${API}/api/storytelling`, {
         chart_type:   chartConfig.type,
         x_column:     chartConfig.xAxis,
-        y_column:     chartConfig.yAxis,
+        y_columns:    chartConfig.yAxes,  // send array
         title:        chartConfig.title,
         data_summary: dataSummary,
         sample_data:  sampleData.slice(0, 5),
@@ -49,7 +49,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
         </div>
         <span style={{ fontSize: 10, color: '#888', background: '#f5f5f5',
                        padding: '2px 8px', borderRadius: 20 }}>
-          쿼터 무제한
+          AI 무제한 사용
         </span>
       </div>
 
@@ -119,6 +119,36 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
             }}>
               <span style={{ fontWeight: 500, flexShrink: 0 }}>권고:</span>
               <span>{story.recommendation}</span>
+            </div>
+          )}
+
+          {/* Roadmap */}
+          {story.roadmap && (
+            <div style={{
+              background: '#FFF3CD', border: '1px solid #FFEAA7',
+              borderRadius: 8, padding: '10px 12px',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#856404', marginBottom: 5 }}>
+                로드맵
+              </div>
+              <div style={{ fontSize: 12, color: '#333', lineHeight: 1.7 }}>
+                {story.roadmap}
+              </div>
+            </div>
+          )}
+
+          {/* Report */}
+          {story.report && (
+            <div style={{
+              background: '#D1ECF1', border: '1px solid #BEE5EB',
+              borderRadius: 8, padding: '10px 12px',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#0C5460', marginBottom: 5 }}>
+                보고서
+              </div>
+              <div style={{ fontSize: 12, color: '#333', lineHeight: 1.7 }}>
+                {story.report}
+              </div>
             </div>
           )}
 

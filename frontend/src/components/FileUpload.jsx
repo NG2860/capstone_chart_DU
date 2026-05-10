@@ -4,14 +4,14 @@ export default function FileUpload({ onUpload }) {
   const ref = useRef()
 
   const handleChange = (e) => {
-    const f = e.target.files[0]
-    if (f) onUpload(f)
+    const f = Array.from(e.target.files)
+    if (f.length > 0) onUpload(f)
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
-    const f = e.dataTransfer.files[0]
-    if (f) onUpload(f)
+    const f = Array.from(e.dataTransfer.files)
+    if (f.length > 0) onUpload(f)
   }
 
   return (
@@ -37,6 +37,7 @@ export default function FileUpload({ onUpload }) {
       <input
         ref={ref}
         type="file"
+        multiple
         accept=".csv,.xlsx,.xls,.json"
         onChange={handleChange}
         style={{ display: 'none' }}

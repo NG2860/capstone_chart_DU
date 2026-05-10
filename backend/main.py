@@ -1,5 +1,8 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from typing import List
 from pydantic import BaseModel
 import pandas as pd
 import numpy as np
@@ -7,10 +10,10 @@ import io
 import json
 import sqlite3
 import os
+import pathlib
 from datetime import date
 from dotenv import load_dotenv
 from google import genai
-from google.genai import types
 
 load_dotenv()
 
@@ -26,7 +29,7 @@ app.add_middleware(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
-DAILY_LIMIT = 2
+DAILY_LIMIT = 1000  # Unlimited daily usage
 DB_PATH = os.path.join(os.path.dirname(__file__), "quota.db")
 
 
@@ -106,7 +109,7 @@ def build_summary(df: pd.DataFrame) -> dict:
     return summary
 
 
-def clean_gemini_json(text: str) -> str:
+def clean_json_response(text: str) -> str:
     text = text.strip()
     if text.startswith("```"):
         parts = text.split("```")
@@ -125,14 +128,32 @@ def root():
 
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
-    content = await file.read()
-    try:
-        df = parse_file(content, file.filename or "upload.csv")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"파일 파싱 오류: {e}")
+async def upload_file(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="Không có file nào được tải lên")
+
+    dfs = []
+    for file in files:
+        content = await file.read()
+        try:
+            dfs.append(parse_file(content, file.filename or "upload.csv"))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Lỗi đọc file {file.filename}: {e}")
+
+    if len(dfs) == 1:
+        df = dfs[0]
+    else:
+        first_cols = set(dfs[0].columns)
+        all_same_cols = all(set(d.columns) == first_cols for d in dfs[1:])
+        if all_same_cols:
+            df = pd.concat(dfs, ignore_index=True)
+        else:
+            df = pd.concat(dfs, axis=1)
+            df = df.loc[:, ~df.columns.duplicated()].copy()
+
+    df.columns = df.columns.astype(str)
 
     columns = [{"name": col, "type": detect_column_type(df[col])} for col in df.columns]
     preview = df.head(5).replace({np.nan: None}).to_dict(orient="records")
@@ -142,15 +163,31 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.post("/api/ai-recommend")
-async def ai_recommend(request: Request, file: UploadFile = File(...)):
+async def ai_recommend(request: Request, files: List[UploadFile] = File(...)):
     ip = request.client.host if request.client else "unknown"
-    content = await file.read()
-    try:
-        df = parse_file(content, file.filename or "upload.csv")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"파일 파싱 오류: {e}")
+
+    dfs = []
+    for file in files:
+        content = await file.read()
+        try:
+            dfs.append(parse_file(content, file.filename or "upload.csv"))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Lỗi đọc file: {e}")
+
+    if len(dfs) == 1:
+        df = dfs[0]
+    else:
+        first_cols = set(dfs[0].columns)
+        all_same_cols = all(set(d.columns) == first_cols for d in dfs[1:])
+        if all_same_cols:
+            df = pd.concat(dfs, ignore_index=True)
+        else:
+            df = pd.concat(dfs, axis=1)
+            df = df.loc[:, ~df.columns.duplicated()].copy()
+
+    df.columns = df.columns.astype(str)
 
     remaining = check_and_use_quota(ip)
 
@@ -158,22 +195,29 @@ async def ai_recommend(request: Request, file: UploadFile = File(...)):
     sample = df.head(3).replace({np.nan: None}).to_dict(orient="records")
 
     prompt = f"""You are a data visualization expert.
-Analyze this dataset and recommend 2-3 optimal chart types.
+Analyze this dataset and recommend 3-5 optimal chart types, including both standard and creative/custom chart suggestions.
 
 Dataset info:
 - Rows: {summary['rows']}
 - Columns: {json.dumps(summary['columns'], ensure_ascii=False)}
 - Sample (3 rows): {json.dumps(sample, ensure_ascii=False, default=str)}
 
+Guidelines:
+- Include standard charts (bar, line, pie, scatter, area, etc.) when appropriate
+- Suggest creative chart types for complex data (treemap, heatmap, sankey, waterfall, funnel, etc.)
+- For each recommendation, provide a score from 0.0 to 1.0 indicating suitability
+- Sort by score descending (highest first)
+- First recommendation should be the most optimal chart for this data
+
 Return ONLY a valid JSON array (no markdown fences, no explanation):
 [
   {{
-    "type": "bar|line|pie|scatter|area",
-    "title": "chart title",
-    "x": "x-axis column name",
-    "y": "y-axis column name",
-    "reason": "Why this chart is optimal (1-2 sentences in Korean)",
-    "score": 0.0
+    "type": "chart type (can be standard or custom/creative)",
+    "title": "descriptive chart title",
+    "y": ["column1", "column2"]  // array of y-axis column names
+    "y": "y-axis column name(s) - can be single string or array of strings for multiple datasets",
+    "reason": "Why this chart is optimal for this data (2-3 sentences in Vietnamese)",
+    "score": 0.95
   }}
 ]"""
 
@@ -182,9 +226,9 @@ Return ONLY a valid JSON array (no markdown fences, no explanation):
 
     try:
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash", contents=prompt
+            model="gemini-2.5-flash", contents=prompt
         )
-        charts = json.loads(clean_gemini_json(response.text))
+        charts = json.loads(clean_json_response(response.text))
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Gemini 응답 파싱 오류: {e}")
     except Exception as e:
@@ -196,7 +240,7 @@ Return ONLY a valid JSON array (no markdown fences, no explanation):
 class StoryRequest(BaseModel):
     chart_type: str
     x_column: str
-    y_column: str
+    y_columns: List[str]  # multiple Y columns
     title: str
     data_summary: dict
     sample_data: list
@@ -205,12 +249,12 @@ class StoryRequest(BaseModel):
 
 @app.post("/api/storytelling")
 async def storytelling(req: StoryRequest):
-    lang = "Korean" if req.language == "ko" else "English"
+    lang = "Vietnamese" if req.language == "vi" else ("Korean" if req.language == "ko" else "English")
 
     prompt = f"""You are a data storytelling expert. Respond entirely in {lang}.
 
 Chart: {req.chart_type} — {req.title}
-X-axis: {req.x_column} | Y-axis: {req.y_column}
+X-axis: {req.x_column} | Y-axes: {', '.join(req.y_columns)}
 Data summary: {json.dumps(req.data_summary, ensure_ascii=False, default=str)}
 Sample data: {json.dumps(req.sample_data, ensure_ascii=False, default=str)}
 
@@ -222,7 +266,9 @@ Return ONLY a valid JSON object (no markdown fences):
     {{"label": "short label", "value": "key metric or value", "type": "positive|negative|neutral"}},
     {{"label": "short label", "value": "key metric or value", "type": "positive|negative|neutral"}}
   ],
-  "recommendation": "1 actionable recommendation based on the data"
+  "recommendation": "1 actionable recommendation based on the data",
+  "roadmap": "A strategic roadmap with 3-5 key steps or milestones based on the data analysis",
+  "report": "A comprehensive report summary including key findings, trends, and future implications"
 }}"""
 
     if not gemini_client:
@@ -230,12 +276,27 @@ Return ONLY a valid JSON object (no markdown fences):
 
     try:
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash", contents=prompt
+            model="gemini-2.5-flash", contents=prompt
         )
-        result = json.loads(clean_gemini_json(response.text))
+        result = json.loads(clean_json_response(response.text))
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Gemini 응답 파싱 오류: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gemini API 오류: {e}")
 
     return result
+
+
+# ── Serve React Frontend (production build) ────────────────────
+FRONTEND_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
+
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        return FileResponse(FRONTEND_DIST / "favicon.ico")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        return FileResponse(FRONTEND_DIST / "index.html")
