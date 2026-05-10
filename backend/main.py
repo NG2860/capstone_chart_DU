@@ -123,7 +123,10 @@ def clean_json_response(text: str) -> str:
 
 
 @app.get("/")
-def root():
+async def root():
+    index = pathlib.Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
+    if index.exists():
+        return FileResponse(index)
     return {"status": "ok", "message": "Smart Chart Builder API"}
 
 
