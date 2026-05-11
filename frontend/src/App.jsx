@@ -17,6 +17,7 @@ export default function App() {
   const [remaining,   setRemaining]   = useState(2)
   const [loading,     setLoading]     = useState(false)
   const [chartConfig, setChartConfig] = useState(null)
+  const [language,    setLanguage]    = useState('ko')
 
   const handleUpload = async (uploadedFiles) => {
     const fArray = Array.isArray(uploadedFiles) ? uploadedFiles : [uploadedFiles]
@@ -38,6 +39,7 @@ export default function App() {
     setLoading(true)
     const fd = new FormData()
     files.forEach(f => fd.append('files', f))
+    fd.append('language', language)
     try {
       const res = await axios.post(`${API}/api/ai-recommend`, fd)
       setAiCharts(res.data.charts)
@@ -71,7 +73,26 @@ export default function App() {
           <a>차트</a>
           <a>내보내기</a>
         </nav>
-        <span className="quota">AI 무제한 사용</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', borderRadius: 20, overflow: 'hidden',
+                        border: '1px solid #534AB7', fontSize: 11 }}>
+            <button
+              onClick={() => setLanguage('ko')}
+              style={{
+                padding: '3px 12px', border: 'none', cursor: 'pointer',
+                background: language === 'ko' ? '#534AB7' : '#fff',
+                color: language === 'ko' ? '#fff' : '#534AB7', fontWeight: 500,
+              }}>한국어</button>
+            <button
+              onClick={() => setLanguage('vi')}
+              style={{
+                padding: '3px 12px', border: 'none', cursor: 'pointer',
+                background: language === 'vi' ? '#534AB7' : '#fff',
+                color: language === 'vi' ? '#fff' : '#534AB7', fontWeight: 500,
+              }}>Tiếng Việt</button>
+          </div>
+          <span className="quota">AI 무제한 사용</span>
+        </div>
       </header>
 
       <div className="body">
@@ -98,7 +119,7 @@ export default function App() {
               chartConfig={chartConfig}
               dataSummary={dataSummary}
               sampleData={preview}
-              language="ko"
+              language={language}
             />
           )}
         </main>

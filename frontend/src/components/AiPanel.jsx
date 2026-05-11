@@ -1,17 +1,20 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
 
 const PALETTE = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40']
 
-const SUPPORTED_CHART_TYPES = ['bar', 'line', 'pie', 'doughnut', 'radar', 'polarArea', 'scatter', 'bubble']
+const SUPPORTED_CHART_TYPES = ['bar', 'line', 'area', 'pie', 'doughnut', 'radar', 'polarArea', 'scatter', 'bubble']
 
-function AiChartCard({ chart, preview, index }) {
+function AiChartCard({ chart, preview, index, onApply }) {
   const canvasRef = useRef(null)
   const chartRef  = useRef(null)
 
-  const isSupported = SUPPORTED_CHART_TYPES.includes(chart.type.toLowerCase())
-  const yColumns = Array.isArray(chart.y) ? chart.y : (chart.y ? [chart.y] : [])
+  const isSupported = SUPPORTED_CHART_TYPES.includes((chart.type || '').toLowerCase())
+  const yColumns = useMemo(
+    () => Array.isArray(chart.y) ? chart.y : (chart.y ? [chart.y] : []),
+    [chart.y]
+  )
 
   useEffect(() => {
     if (!isSupported || !canvasRef.current || !preview?.length || !chart.x || yColumns.length === 0) return
@@ -22,7 +25,6 @@ function AiChartCard({ chart, preview, index }) {
     const isPieOrDonut = ['pie', 'doughnut', 'polarArea'].includes(chart.type)
     const chartType = chart.type === 'area' ? 'line' : chart.type
 
-    // for pie/donut only use first Y column
     const activeCols = isPieOrDonut ? [yColumns[0]] : yColumns
 
     const datasets = activeCols.map((col, idx) => {
@@ -98,10 +100,11 @@ function AiChartCard({ chart, preview, index }) {
         <canvas ref={canvasRef} style={{ maxHeight: 150, marginBottom: 8 }} />
       ) : (
         <div style={{ height: 80, display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', color: '#666', fontSize: 10,
+                      justifyContent: 'center', color: '#999', fontSize: 10,
                       border: '1px dashed #ddd', borderRadius: 6, marginBottom: 8,
-                      background: '#f9f9f9' }}>
-          {isSupported ? '데이터 없음' : `${chart.type} 차트 (미리보기 불가)`}
+                      background: '#f9f9f9', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 16 }}>📊</span>
+          <span>{!isSupported ? `${chart.type} — 미리보기 불가` : '데이터 없음'}</span>
         </div>
       )}
 
@@ -121,12 +124,16 @@ function AiChartCard({ chart, preview, index }) {
       {/* Apply button */}
       <button
         onClick={() => onApply(chart)}
+        disabled={!isSupported}
+        title={!isSupported ? `${chart.type} 차트는 지원되지 않습니다` : ''}
         style={{
           width: '100%', marginTop: 8, padding: '6px 0', borderRadius: 6,
-          border: 'none', background: '#534AB7', color: '#fff', fontSize: 10,
-          fontWeight: 500, cursor: 'pointer',
+          border: 'none',
+          background: isSupported ? '#534AB7' : '#ccc',
+          color: '#fff', fontSize: 10,
+          fontWeight: 500, cursor: isSupported ? 'pointer' : 'not-allowed',
         }}>
-        이 차트 생성
+        {isSupported ? '이 차트 생성' : '지원하지 않는 차트 유형'}
       </button>
 
       {chart.score > 0 && (
@@ -147,7 +154,7 @@ export default function AiPanel({ charts, loading, onRequest, onApply, preview }
       </div>
 
       {charts.map((c, i) => (
-        <AiChartCard key={i} chart={c} preview={preview} index={i} />
+        <AiChartCard key={i} chart={c} preview={preview} index={i} onApply={onApply} />
       ))}
 
       <div style={{ borderTop: '1px solid #eee', paddingTop: 8 }}>

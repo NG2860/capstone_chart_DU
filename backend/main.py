@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -166,7 +166,7 @@ async def upload_file(files: List[UploadFile] = File(...)):
 
 
 @app.post("/api/ai-recommend")
-async def ai_recommend(request: Request, files: List[UploadFile] = File(...)):
+async def ai_recommend(request: Request, files: List[UploadFile] = File(...), language: str = Form('ko')):
     ip = request.client.host if request.client else "unknown"
 
     dfs = []
@@ -197,8 +197,10 @@ async def ai_recommend(request: Request, files: List[UploadFile] = File(...)):
     summary = build_summary(df)
     sample = df.head(3).replace({np.nan: None}).to_dict(orient="records")
 
+    lang_name = "Vietnamese" if language == "vi" else ("Korean" if language == "ko" else "English")
+
     prompt = f"""You are a data visualization expert.
-Analyze this dataset and recommend 3-5 optimal chart types, including both standard and creative/custom chart suggestions.
+Analyze this dataset and recommend 3-5 optimal chart types.
 
 Dataset info:
 - Rows: {summary['rows']}
@@ -206,20 +208,21 @@ Dataset info:
 - Sample (3 rows): {json.dumps(sample, ensure_ascii=False, default=str)}
 
 Guidelines:
-- Include standard charts (bar, line, pie, scatter, area, etc.) when appropriate
-- Suggest creative chart types for complex data (treemap, heatmap, sankey, waterfall, funnel, etc.)
+- ONLY use chart types from this supported list: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea
 - For each recommendation, provide a score from 0.0 to 1.0 indicating suitability
 - Sort by score descending (highest first)
 - First recommendation should be the most optimal chart for this data
+- Choose x as the most meaningful category/date column, y as one or more numeric columns
+- Write the "reason" field in {lang_name}
 
 Return ONLY a valid JSON array (no markdown fences, no explanation):
 [
   {{
-    "type": "chart type (can be standard or custom/creative)",
+    "type": "one of: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea",
     "title": "descriptive chart title",
-    "y": ["column1", "column2"]  // array of y-axis column names
-    "y": "y-axis column name(s) - can be single string or array of strings for multiple datasets",
-    "reason": "Why this chart is optimal for this data (2-3 sentences in Vietnamese)",
+    "x": "x-axis column name",
+    "y": ["column1", "column2"],
+    "reason": "Why this chart is optimal for this data (2-3 sentences in {lang_name})",
     "score": 0.95
   }}
 ]"""

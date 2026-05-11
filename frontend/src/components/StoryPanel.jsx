@@ -14,6 +14,34 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
 
+  const downloadReport = () => {
+    if (!story) return
+    const lines = [
+      `=== ${chartConfig.title} ===`,
+      '',
+      '[ 데이터 스토리 ]',
+      story.story,
+      '',
+      '[ 인사이트 ]',
+      ...story.insights.map(ins => `• ${ins.label}: ${ins.value}`),
+      '',
+      '[ 권고 ]',
+      story.recommendation,
+      '',
+      '[ 로드맵 ]',
+      story.roadmap,
+      '',
+      '[ 보고서 ]',
+      story.report,
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
+    const link = document.createElement('a')
+    link.download = `report_${chartConfig.title || 'story'}.txt`
+    link.href = URL.createObjectURL(blob)
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
   const generate = async () => {
     setLoading(true)
     setError(null)
@@ -47,10 +75,23 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0F6E56' }} />
           <span style={{ fontSize: 12, fontWeight: 500 }}>데이터 스토리텔링</span>
         </div>
-        <span style={{ fontSize: 10, color: '#888', background: '#f5f5f5',
-                       padding: '2px 8px', borderRadius: 20 }}>
-          AI 무제한 사용
-        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {story && (
+            <button
+              onClick={downloadReport}
+              style={{
+                fontSize: 10, padding: '3px 10px', borderRadius: 20,
+                border: '1px solid #0F6E56', background: '#fff',
+                color: '#0F6E56', cursor: 'pointer', fontWeight: 500,
+              }}>
+              ⬇ 보고서 다운로드
+            </button>
+          )}
+          <span style={{ fontSize: 10, color: '#888', background: '#f5f5f5',
+                         padding: '2px 8px', borderRadius: 20 }}>
+            AI 무제한 사용
+          </span>
+        </div>
       </div>
 
       {/* 생성 버튼 */}

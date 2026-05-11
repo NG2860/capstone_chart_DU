@@ -183,7 +183,25 @@ export default function ManualChart({ columns, preview = [], config, onConfigCha
 
       {/* canvas */}
       {xAxis && yAxes.length > 0 ? (
-        <canvas ref={canvasRef} style={{ maxHeight: 240 }} />
+        <div style={{ position: 'relative' }}>
+          <canvas ref={canvasRef} style={{ maxHeight: 240 }} />
+          <button
+            onClick={() => {
+              if (!canvasRef.current) return
+              const link = document.createElement('a')
+              link.download = `chart_${xAxis}.png`
+              link.href = canvasRef.current.toDataURL('image/png')
+              link.click()
+            }}
+            style={{
+              position: 'absolute', top: 6, right: 6,
+              padding: '4px 10px', fontSize: 10, borderRadius: 6,
+              border: '1px solid #ddd', background: 'rgba(255,255,255,0.9)',
+              cursor: 'pointer', color: '#534AB7', fontWeight: 500,
+            }}>
+            ⬇ PNG 다운로드
+          </button>
+        </div>
       ) : (
         <div style={{ height: 160, display: 'flex', alignItems: 'center',
                       justifyContent: 'center', color: '#aaa', fontSize: 12,
