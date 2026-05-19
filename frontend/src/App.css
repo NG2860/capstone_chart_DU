@@ -54,3 +54,13 @@ body { font-family: 'Malgun Gothic', 'Segoe UI', sans-serif; }
   padding: 12px;
   overflow-y: auto;
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .body {
+    grid-template-columns: 1fr !important;
+  }
+  .sidebar { border-right: none; border-bottom: 1px solid #eee; }
+  .right   { border-left: none;  border-top:    1px solid #eee; }
+}

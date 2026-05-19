@@ -183,7 +183,7 @@ export default function ManualChart({ columns, preview = [], config, onConfigCha
 
       {/* canvas */}
       {xAxis && yAxes.length > 0 ? (
-        <div style={{ position: 'relative' }}>
+        <div id="chart-container" style={{ position: 'relative' }}>
           <canvas ref={canvasRef} style={{ maxHeight: 240 }} />
           <button
             onClick={() => {

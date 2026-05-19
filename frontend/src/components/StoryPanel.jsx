@@ -9,7 +9,7 @@ const INSIGHT_COLORS = {
   neutral:  { bg: '#EEEDFE', text: '#3C3489', border: '#AFA9EC' },
 }
 
-export default function StoryPanel({ chartConfig, dataSummary, sampleData, language = 'ko' }) {
+export default function StoryPanel({ chartConfig, dataSummary, sampleData, language = 'ko', onStoryGenerated }) {
   const [story,   setStory]   = useState(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
@@ -56,6 +56,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
         language,
       })
       setStory(res.data)
+      if (onStoryGenerated) onStoryGenerated(res.data)
     } catch (e) {
       setError('스토리 생성 실패. 다시 시도해주세요.')
     } finally {
