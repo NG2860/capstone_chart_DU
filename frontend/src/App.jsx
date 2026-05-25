@@ -6,6 +6,7 @@ import ManualChart      from './components/ManualChart'
 import AiPanel          from './components/AiPanel'
 import StoryPanel       from './components/StoryPanel'
 import ExportPanel      from './components/ExportPanel'
+import ReportBuilder    from './components/ReportBuilder'
 import LanguageSwitcher from './components/LanguageSwitcher'
 
 const API = ''  // Vite proxy: /api/* → http://localhost:8000
@@ -97,7 +98,7 @@ export default function App() {
           )}
         </aside>
 
-        {/* Main: manual chart + story panel */}
+        {/* Main: manual chart + story panel + report builder */}
         <main className="main">
           <ManualChart
             columns={columns}
@@ -113,8 +114,17 @@ export default function App() {
               sampleData={preview}
               language={lang}
               onStoryGenerated={(s) => setAiStory(s)}
+              chartContainerId="chart-container"
             />
           )}
+
+          {/* Report Builder — DOCX download with chart embedded */}
+          <ReportBuilder
+            lang={lang}
+            chartConfig={chartConfig}
+            aiStory={aiStory}
+            chartContainerId="chart-container"
+          />
         </main>
 
         {/* Right: AI panel + Export panel */}

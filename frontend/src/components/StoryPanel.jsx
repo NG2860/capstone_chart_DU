@@ -9,43 +9,83 @@ const INSIGHT_COLORS = {
   neutral:  { bg: '#EEEDFE', text: '#3C3489', border: '#AFA9EC' },
 }
 
-export default function StoryPanel({ chartConfig, dataSummary, sampleData, language = 'ko', onStoryGenerated }) {
-  const [story,   setStory]   = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState(null)
+const T = {
+  ko: {
+    heading: '데이터 스토리텔링',
+    generate: 'AI 스토리 생성',
+    generating: '스토리 생성 중...',
+    error: '스토리 생성 실패. 다시 시도해주세요.',
+    unlimited: 'AI 무제한 사용',
+    storyLabel: '데이터 스토리',
+    recommend: '권고:',
+    roadmap: '로드맵',
+    report: '보고서',
+    chartSection: '📊 차트 미리보기',
+    includeChart: '차트 포함',
+  },
+  vi: {
+    heading: 'Kể chuyện dữ liệu',
+    generate: 'Tạo AI Story',
+    generating: 'Đang tạo story...',
+    error: 'Tạo story thất bại. Vui lòng thử lại.',
+    unlimited: 'AI không giới hạn',
+    storyLabel: 'Câu chuyện dữ liệu',
+    recommend: 'Đề xuất:',
+    roadmap: 'Lộ trình',
+    report: 'Báo cáo',
+    chartSection: '📊 Xem trước biểu đồ',
+    includeChart: 'Bao gồm biểu đồ',
+  },
+  en: {
+    heading: 'Data Storytelling',
+    generate: 'Generate AI Story',
+    generating: 'Generating story...',
+    error: 'Story generation failed. Please try again.',
+    unlimited: 'AI Unlimited',
+    storyLabel: 'Data Story',
+    recommend: 'Recommendation:',
+    roadmap: 'Roadmap',
+    report: 'Report',
+    chartSection: '📊 Chart Preview',
+    includeChart: 'Include chart',
+  },
+}
 
-  const downloadReport = () => {
-    if (!story) return
-    const lines = [
-      `=== ${chartConfig.title} ===`,
-      '',
-      '[ 데이터 스토리 ]',
-      story.story,
-      '',
-      '[ 인사이트 ]',
-      ...story.insights.map(ins => `• ${ins.label}: ${ins.value}`),
-      '',
-      '[ 권고 ]',
-      story.recommendation,
-      '',
-      '[ 로드맵 ]',
-      story.roadmap,
-      '',
-      '[ 보고서 ]',
-      story.report,
-    ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
-    const link = document.createElement('a')
-    link.download = `report_${chartConfig.title || 'story'}.txt`
-    link.href = URL.createObjectURL(blob)
-    link.click()
-    URL.revokeObjectURL(link.href)
+export default function StoryPanel({
+  chartConfig,
+  dataSummary,
+  sampleData,
+  language = 'ko',
+  onStoryGenerated,
+  chartContainerId = 'chart-container',
+}) {
+  const [story,        setStory]        = useState(null)
+  const [loading,      setLoading]      = useState(false)
+  const [error,        setError]        = useState(null)
+  const [chartImage,   setChartImage]   = useState(null)
+  const [includeChart, setIncludeChart] = useState(true)
+
+  const t = T[language] || T.ko
+
+  /**
+   * Capture the current chart canvas as a data URL for embedding in the story
+   */
+  const captureChart = () => {
+    const container = document.getElementById(chartContainerId)
+    if (!container) return null
+    const canvas = container.querySelector('canvas')
+    if (!canvas) return null
+    return canvas.toDataURL('image/png')
   }
 
   const generate = async () => {
     setLoading(true)
     setError(null)
     try {
+      // Capture chart before generating story
+      const imgUrl = captureChart()
+      if (imgUrl) setChartImage(imgUrl)
+
       const res = await axios.post(`${API}/api/storytelling`, {
         chart_type:   chartConfig.type,
         x_column:     chartConfig.xAxis,
@@ -58,7 +98,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
       setStory(res.data)
       if (onStoryGenerated) onStoryGenerated(res.data)
     } catch (e) {
-      setError('스토리 생성 실패. 다시 시도해주세요.')
+      setError(t.error)
     } finally {
       setLoading(false)
     }
@@ -74,26 +114,29 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0F6E56' }} />
-          <span style={{ fontSize: 12, fontWeight: 500 }}>데이터 스토리텔링</span>
+          <span style={{ fontSize: 12, fontWeight: 500 }}>{t.heading}</span>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {story && (
-            <button
-              onClick={downloadReport}
-              style={{
-                fontSize: 10, padding: '3px 10px', borderRadius: 20,
-                border: '1px solid #0F6E56', background: '#fff',
-                color: '#0F6E56', cursor: 'pointer', fontWeight: 500,
-              }}>
-              ⬇ 보고서 다운로드
-            </button>
-          )}
           <span style={{ fontSize: 10, color: '#888', background: '#f5f5f5',
                          padding: '2px 8px', borderRadius: 20 }}>
-            AI 무제한 사용
+            {t.unlimited}
           </span>
         </div>
       </div>
+
+      {/* Include chart toggle */}
+      <label style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        fontSize: 11, color: '#555', cursor: 'pointer',
+      }}>
+        <input
+          type="checkbox"
+          checked={includeChart}
+          onChange={(e) => setIncludeChart(e.target.checked)}
+          style={{ accentColor: '#534AB7' }}
+        />
+        {t.includeChart}
+      </label>
 
       {/* 생성 버튼 */}
       <button
@@ -101,10 +144,12 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
         disabled={loading}
         style={{
           width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-          background: loading ? '#aaa' : '#0F6E56',
+          background: loading ? '#aaa' : 'linear-gradient(135deg, #0F6E56, #15967A)',
           color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+          boxShadow: loading ? 'none' : '0 2px 6px rgba(15,110,86,0.25)',
+          transition: 'all 0.2s ease',
         }}>
-        {loading ? '스토리 생성 중...' : 'AI 스토리 생성'}
+        {loading ? t.generating : t.generate}
       </button>
 
       {/* 에러 */}
@@ -118,6 +163,26 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
       {/* 결과 */}
       {story && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+          {/* Embedded Chart Image in Story */}
+          {includeChart && chartImage && (
+            <div style={{
+              background: '#f8f9fa', border: '1px solid #e9ecef',
+              borderRadius: 8, padding: 10, textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#534AB7', marginBottom: 6 }}>
+                {t.chartSection}
+              </div>
+              <img
+                src={chartImage}
+                alt="Chart"
+                style={{
+                  maxWidth: '100%', borderRadius: 6,
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                }}
+              />
+            </div>
+          )}
 
           {/* Insight cards */}
           <div style={{ display: 'flex', gap: 6 }}>
@@ -145,7 +210,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
             borderRadius: 8, padding: '10px 12px',
           }}>
             <div style={{ fontSize: 11, fontWeight: 500, color: '#085041', marginBottom: 5 }}>
-              데이터 스토리
+              {t.storyLabel}
             </div>
             <div style={{ fontSize: 12, color: '#333', lineHeight: 1.7 }}>
               {story.story}
@@ -159,7 +224,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
               border: '1px solid #AFA9EC', borderRadius: 6, padding: '7px 10px',
               display: 'flex', gap: 6, alignItems: 'flex-start',
             }}>
-              <span style={{ fontWeight: 500, flexShrink: 0 }}>권고:</span>
+              <span style={{ fontWeight: 500, flexShrink: 0 }}>{t.recommend}</span>
               <span>{story.recommendation}</span>
             </div>
           )}
@@ -171,7 +236,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
               borderRadius: 8, padding: '10px 12px',
             }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: '#856404', marginBottom: 5 }}>
-                로드맵
+                {t.roadmap}
               </div>
               <div style={{ fontSize: 12, color: '#333', lineHeight: 1.7 }}>
                 {story.roadmap}
@@ -186,7 +251,7 @@ export default function StoryPanel({ chartConfig, dataSummary, sampleData, langu
               borderRadius: 8, padding: '10px 12px',
             }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: '#0C5460', marginBottom: 5 }}>
-                보고서
+                {t.report}
               </div>
               <div style={{ fontSize: 12, color: '#333', lineHeight: 1.7 }}>
                 {story.report}
