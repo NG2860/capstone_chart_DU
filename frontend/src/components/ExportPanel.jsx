@@ -147,7 +147,15 @@ export default function ExportPanel({ lang = 'ko', chartContainerId = 'chart-con
     if (!el) return
     setExporting(true)
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true })
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        windowWidth: 800,
+        onclone: (doc) => {
+          const clonedEl = doc.getElementById(chartContainerId)
+          if (clonedEl) clonedEl.style.width = '800px'
+        }
+      })
       const link = document.createElement('a')
       const fileName = (customTitle || 'chart').replace(/\s+/g, '_')
       link.download = `${fileName}_${date.replace(/\//g, '-')}.png`
@@ -166,7 +174,15 @@ export default function ExportPanel({ lang = 'ko', chartContainerId = 'chart-con
     if (!el) return
     setExporting(true)
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true })
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        windowWidth: 800,
+        onclone: (doc) => {
+          const clonedEl = doc.getElementById(chartContainerId)
+          if (clonedEl) clonedEl.style.width = '800px'
+        }
+      })
       const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
       let y = 15
 

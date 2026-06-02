@@ -69,14 +69,21 @@ export default function ManualChart({ columns, preview = [], config, onConfigCha
 
     const datasets = activeCols.map((col, idx) => {
       const color = PALETTE[idx % PALETTE.length]
-      let data = preview.map(row => Number(row[col] ?? 0))
+      let data = preview.map(row => {
+        const val = String(row[col] ?? '0').replace(/,/g, '')
+        return Number(val) || 0
+      })
 
       if (type === 'scatter' || type === 'bubble') {
-        data = preview.map(row => ({
-          x: isNaN(Number(row[xAxis])) ? idx * 20 + Math.random() * 10 : Number(row[xAxis]),
-          y: Number(row[col] ?? 0),
-          r: type === 'bubble' ? Math.random() * 12 + 5 : undefined,
-        }))
+        data = preview.map(row => {
+          const xVal = String(row[xAxis] ?? '').replace(/,/g, '')
+          const yVal = String(row[col] ?? '0').replace(/,/g, '')
+          return {
+            x: isNaN(Number(xVal)) ? idx * 20 + Math.random() * 10 : Number(xVal),
+            y: Number(yVal) || 0,
+            r: type === 'bubble' ? Math.random() * 12 + 5 : undefined,
+          }
+        })
       }
 
       return {

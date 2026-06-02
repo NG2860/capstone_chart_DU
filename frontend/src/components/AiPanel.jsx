@@ -29,14 +29,21 @@ function AiChartCard({ chart, preview, index, onApply }) {
 
     const datasets = activeCols.map((col, idx) => {
       const color = PALETTE[idx % PALETTE.length]
-      let data = preview.map(row => Number(row[col] ?? 0))
+      let data = preview.map(row => {
+        const val = String(row[col] ?? '0').replace(/,/g, '')
+        return Number(val) || 0
+      })
 
       if (chart.type === 'scatter' || chart.type === 'bubble') {
-        data = preview.map(row => ({
-          x: isNaN(Number(row[chart.x])) ? idx * 20 + Math.random() * 10 : Number(row[chart.x]),
-          y: Number(row[col] ?? 0),
-          r: chart.type === 'bubble' ? 8 : undefined,
-        }))
+        data = preview.map(row => {
+          const xVal = String(row[chart.x] ?? '').replace(/,/g, '')
+          const yVal = String(row[col] ?? '0').replace(/,/g, '')
+          return {
+            x: isNaN(Number(xVal)) ? idx * 20 + Math.random() * 10 : Number(xVal),
+            y: Number(yVal) || 0,
+            r: chart.type === 'bubble' ? 8 : undefined,
+          }
+        })
       }
 
       return {

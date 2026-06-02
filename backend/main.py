@@ -84,12 +84,23 @@ def detect_column_type(series: pd.Series) -> str:
 def parse_file(file_bytes: bytes, filename: str) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower()
     if ext == "csv":
-        return pd.read_csv(io.BytesIO(file_bytes))
+        df = pd.read_csv(io.BytesIO(file_bytes))
     elif ext in ("xlsx", "xls"):
-        return pd.read_excel(io.BytesIO(file_bytes))
+        df = pd.read_excel(io.BytesIO(file_bytes))
     elif ext == "json":
-        return pd.read_json(io.BytesIO(file_bytes))
-    raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식 (CSV, Excel, JSON만 가능)")
+        df = pd.read_json(io.BytesIO(file_bytes))
+    else:
+        raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식 (CSV, Excel, JSON만 가능)")
+    
+    for col in df.columns:
+        if df[col].dtype == object:
+            try:
+                # Only clean if not all strings are completely non-numeric
+                cleaned = df[col].astype(str).str.replace(',', '').str.strip()
+                df[col] = pd.to_numeric(cleaned, errors='raise')
+            except Exception:
+                pass
+    return df
 
 
 def build_summary(df: pd.DataFrame) -> dict:
@@ -110,12 +121,28 @@ def build_summary(df: pd.DataFrame) -> dict:
 
 
 def clean_json_response(text: str) -> str:
+    import re
     text = text.strip()
-    if text.startswith("```"):
-        parts = text.split("```")
-        text = parts[1] if len(parts) > 1 else text
-        if text.startswith("json"):
-            text = text[4:]
+    match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
+    if match:
+        text = match.group(1)
+    else:
+        start_idx = text.find('{')
+        start_list = text.find('[')
+        if start_idx == -1 and start_list != -1: start = start_list
+        elif start_list == -1 and start_idx != -1: start = start_idx
+        elif start_idx != -1 and start_list != -1: start = min(start_idx, start_list)
+        else: start = 0
+        
+        end_idx = text.rfind('}')
+        end_list = text.rfind(']')
+        if end_idx == -1 and end_list != -1: end = end_list
+        elif end_list == -1 and end_idx != -1: end = end_idx
+        elif end_idx != -1 and end_list != -1: end = max(end_idx, end_list)
+        else: end = len(text) - 1
+            
+        if start != -1 and end != -1 and end >= start:
+            text = text[start:end+1]
     return text.strip()
 
 
@@ -159,7 +186,7 @@ async def upload_file(files: List[UploadFile] = File(...)):
     df.columns = df.columns.astype(str)
 
     columns = [{"name": col, "type": detect_column_type(df[col])} for col in df.columns]
-    preview = df.head(5).replace({np.nan: None}).to_dict(orient="records")
+    preview = df.head(1000).replace({np.nan: None}).to_dict(orient="records")
     summary = build_summary(df)
 
     return {"columns": columns, "preview": preview, "summary": summary, "rows": len(df)}
