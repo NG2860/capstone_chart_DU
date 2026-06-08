@@ -5,6 +5,7 @@ import json
 import os
 import pathlib
 import sqlite3
+import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -30,6 +31,16 @@ app.add_middleware(
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+GEMINI_MODELS = [
+    model.strip()
+    for model in os.getenv(
+        "GEMINI_MODELS",
+        os.getenv("GEMINI_MODEL", "gemini-2.5-flash") + ",gemini-2.5-flash-lite,gemini-1.5-flash",
+    ).split(",")
+    if model.strip()
+]
+GEMINI_RETRIES_PER_MODEL = int(os.getenv("GEMINI_RETRIES_PER_MODEL", "2"))
+GEMINI_RETRY_DELAY_SECONDS = float(os.getenv("GEMINI_RETRY_DELAY_SECONDS", "1.5"))
 
 DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "1000"))
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
@@ -250,6 +261,33 @@ def normalize_recommendations(raw: Any, summary: dict) -> list[dict]:
     return sorted(normalized, key=lambda c: c["score"], reverse=True)
 
 
+def is_transient_gemini_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in ("503", "unavailable", "high demand", "rate limit", "temporarily"))
+
+
+def generate_gemini_content(prompt: str):
+    if not gemini_client:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
+
+    last_error: Exception | None = None
+    for model in GEMINI_MODELS:
+        for attempt in range(GEMINI_RETRIES_PER_MODEL):
+            try:
+                return gemini_client.models.generate_content(model=model, contents=prompt)
+            except Exception as e:
+                last_error = e
+                if not is_transient_gemini_error(e):
+                    raise
+                if attempt < GEMINI_RETRIES_PER_MODEL - 1:
+                    time.sleep(GEMINI_RETRY_DELAY_SECONDS * (attempt + 1))
+
+    raise HTTPException(
+        status_code=503,
+        detail=f"Gemini is temporarily unavailable after trying models: {', '.join(GEMINI_MODELS)}. Last error: {last_error}",
+    )
+
+
 @app.get("/")
 async def root():
     index = pathlib.Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
@@ -306,14 +344,8 @@ Return ONLY a valid JSON array:
   }}
 ]"""
 
-    if not gemini_client:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
-
     try:
-        response = gemini_client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            contents=prompt,
-        )
+        response = generate_gemini_content(prompt)
         raw_charts = json.loads(clean_json_response(response.text))
         charts = normalize_recommendations(raw_charts, summary)
     except json.JSONDecodeError as e:
@@ -360,14 +392,8 @@ Return ONLY a valid JSON object:
   "report": "A comprehensive report summary including key findings, trends, and future implications"
 }}"""
 
-    if not gemini_client:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
-
     try:
-        response = gemini_client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            contents=prompt,
-        )
+        response = generate_gemini_content(prompt)
         result = json.loads(clean_json_response(response.text))
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Could not parse Gemini JSON response: {e}")
