@@ -9,7 +9,7 @@ import ExportPanel      from './components/ExportPanel'
 import ReportBuilder    from './components/ReportBuilder'
 import LanguageSwitcher from './components/LanguageSwitcher'
 
-const API = ''  // Vite proxy: /api/* → http://localhost:8000
+const API = import.meta.env.VITE_API_BASE_URL || ''  // Empty value uses the Vite /api proxy in dev.
 
 const UI = {
   ko: { appName: '스마트 차트 빌더', quota: () => 'AI 무제한 사용' },

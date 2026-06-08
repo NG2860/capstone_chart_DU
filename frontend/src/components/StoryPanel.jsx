@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
 
-const API = ''  // Vite proxy
+const API = import.meta.env.VITE_API_BASE_URL || ''
 
 const INSIGHT_COLORS = {
   positive: { bg: '#E1F5EE', text: '#085041', border: '#9FE1CB' },

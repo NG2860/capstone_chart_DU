@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo } from 'react'
 import { Chart, registerables } from 'chart.js'
+import { buildChartData } from '../utils/chartData'
 Chart.register(...registerables)
 
 const PALETTE = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40']
@@ -21,57 +22,26 @@ function AiChartCard({ chart, preview, index, onApply }) {
     if (chartRef.current) chartRef.current.destroy()
 
     const ctx = canvasRef.current.getContext('2d')
-    const labels = preview.map(row => String(row[chart.x] ?? ''))
-    const isPieOrDonut = ['pie', 'doughnut', 'polarArea'].includes(chart.type)
-    const chartType = chart.type === 'area' ? 'line' : chart.type
-
-    const activeCols = isPieOrDonut ? [yColumns[0]] : yColumns
-
-    const datasets = activeCols.map((col, idx) => {
-      const color = PALETTE[idx % PALETTE.length]
-      let data = preview.map(row => {
-        const val = String(row[col] ?? '0').replace(/,/g, '')
-        return Number(val) || 0
-      })
-
-      if (chart.type === 'scatter' || chart.type === 'bubble') {
-        data = preview.map(row => {
-          const xVal = String(row[chart.x] ?? '').replace(/,/g, '')
-          const yVal = String(row[col] ?? '0').replace(/,/g, '')
-          return {
-            x: isNaN(Number(xVal)) ? idx * 20 + Math.random() * 10 : Number(xVal),
-            y: Number(yVal) || 0,
-            r: chart.type === 'bubble' ? 8 : undefined,
-          }
-        })
-      }
-
-      return {
-        label: col,
-        data,
-        backgroundColor: isPieOrDonut ? PALETTE : (chart.type === 'area' ? color + '33' : color),
-        borderColor: isPieOrDonut ? '#fff' : color,
-        borderWidth: 1.5,
-        fill: chart.type === 'area',
-        tension: 0.3,
-      }
+    const chartData = buildChartData({
+      type: chart.type,
+      xAxis: chart.x,
+      yAxes: yColumns,
+      rows: preview,
+      palette: PALETTE,
     })
 
     chartRef.current = new Chart(ctx, {
-      type: chartType,
+      type: chartData.chartType,
       data: {
-        labels: chart.type === 'scatter' || chart.type === 'bubble' ? undefined : labels,
-        datasets,
+        labels: chartData.labels,
+        datasets: chartData.datasets,
       },
       options: {
         responsive: true,
         plugins: {
-          legend: { display: isPieOrDonut, labels: { font: { size: 9 }, boxWidth: 10 } },
+          legend: { display: ['pie', 'doughnut', 'polarArea'].includes(chart.type), labels: { font: { size: 9 }, boxWidth: 10 } },
         },
-        scales: isPieOrDonut ? {} : {
-          x: { ticks: { font: { size: 9 }, maxRotation: 40, maxTicksLimit: 6 } },
-          y: { ticks: { font: { size: 9 } } },
-        },
+        scales: chartData.scales,
       },
     })
 
