@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Chart, registerables } from 'chart.js'
+import { buildChartData } from '../utils/chartData'
 Chart.register(...registerables)
 
 const CHART_TYPES = [
@@ -12,6 +13,13 @@ const CHART_TYPES = [
   { value: 'bubble',    label: '버블' },
   { value: 'radar',     label: '방사형' },
   { value: 'polarArea', label: '극좌표' },
+]
+
+const AI_CHART_TYPES = [
+  { value: 'horizontalBar', label: 'Horizontal' },
+  { value: 'stackedBar',    label: 'Stacked' },
+  { value: 'combo',         label: 'Combo' },
+  { value: 'histogram',     label: 'Histogram' },
 ]
 
 const PALETTE = [
@@ -60,55 +68,28 @@ export default function ManualChart({ columns, preview = [], config, onConfigCha
     if (chartRef.current) chartRef.current.destroy()
 
     const ctx = canvasRef.current.getContext('2d')
-    const labels = preview.map(row => String(row[xAxis] ?? ''))
-    const isPieOrDonut = ['pie', 'doughnut', 'polarArea'].includes(type)
-    const chartType = type === 'area' ? 'line' : type
-
-    // for pie/donut only use first Y column
-    const activeCols = isPieOrDonut ? [yAxes[0]] : yAxes
-
-    const datasets = activeCols.map((col, idx) => {
-      const color = PALETTE[idx % PALETTE.length]
-      let data = preview.map(row => Number(row[col] ?? 0))
-
-      if (type === 'scatter' || type === 'bubble') {
-        data = preview.map(row => ({
-          x: isNaN(Number(row[xAxis])) ? idx * 20 + Math.random() * 10 : Number(row[xAxis]),
-          y: Number(row[col] ?? 0),
-          r: type === 'bubble' ? Math.random() * 12 + 5 : undefined,
-        }))
-      }
-
-      return {
-        label: col,
-        data,
-        backgroundColor: isPieOrDonut
-          ? ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40']
-          : (type === 'area' ? color + '33' : color),
-        borderColor: isPieOrDonut ? '#fff' : color,
-        borderWidth: 1.5,
-        fill: type === 'area',
-        tension: 0.3,
-        pointRadius: type === 'line' || type === 'area' ? 3 : undefined,
-      }
+    const chartData = buildChartData({
+      type,
+      xAxis,
+      yAxes,
+      rows: preview,
+      palette: PALETTE,
     })
 
     chartRef.current = new Chart(ctx, {
-      type: chartType,
+      type: chartData.chartType,
       data: {
-        labels: type === 'scatter' || type === 'bubble' ? undefined : labels,
-        datasets,
+        labels: chartData.labels,
+        datasets: chartData.datasets,
       },
       options: {
         responsive: true,
+        indexAxis: chartData.indexAxis,
         plugins: {
-          legend: { display: yAxes.length > 1 || isPieOrDonut, position: 'top',
+          legend: { display: yAxes.length > 1 || ['pie', 'doughnut', 'polarArea'].includes(type), position: 'top',
                     labels: { font: { size: 10 }, boxWidth: 10 } },
         },
-        scales: isPieOrDonut ? {} : {
-          x: { ticks: { font: { size: 10 }, maxRotation: 40 } },
-          y: { ticks: { font: { size: 10 } } },
-        },
+        scales: chartData.scales,
       },
     })
   }, [xAxis, yAxes, type, preview])
@@ -122,7 +103,7 @@ export default function ManualChart({ columns, preview = [], config, onConfigCha
 
       {/* chart type buttons */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-        {CHART_TYPES.map(t => (
+        {[...CHART_TYPES, ...AI_CHART_TYPES].map(t => (
           <button key={t.value} onClick={() => setType(t.value)}
             style={{
               flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6,

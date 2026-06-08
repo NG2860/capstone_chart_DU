@@ -1,19 +1,22 @@
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from typing import List
-from pydantic import BaseModel
-import pandas as pd
-import numpy as np
+from datetime import date
+from typing import Any, List
 import io
 import json
-import sqlite3
 import os
 import pathlib
-from datetime import date
+import sqlite3
+import time
+
 from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from google import genai
+import numpy as np
+import pandas as pd
+from pydantic import BaseModel
+
 
 load_dotenv()
 
@@ -21,28 +24,46 @@ app = FastAPI(title="Smart Chart Builder API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",")],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+GEMINI_MODELS = [
+    model.strip()
+    for model in os.getenv(
+        "GEMINI_MODELS",
+        os.getenv("GEMINI_MODEL", "gemini-2.5-flash") + ",gemini-2.5-flash-lite,gemini-1.5-flash",
+    ).split(",")
+    if model.strip()
+]
+GEMINI_RETRIES_PER_MODEL = int(os.getenv("GEMINI_RETRIES_PER_MODEL", "2"))
+GEMINI_RETRY_DELAY_SECONDS = float(os.getenv("GEMINI_RETRY_DELAY_SECONDS", "1.5"))
 
-DAILY_LIMIT = 1000  # Unlimited daily usage
+DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "1000"))
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+MAX_FILES = int(os.getenv("MAX_FILES", "5"))
 DB_PATH = os.path.join(os.path.dirname(__file__), "quota.db")
+SUPPORTED_CHART_TYPES = {
+    "bar", "line", "area", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea",
+    "horizontalBar", "stackedBar", "combo", "histogram",
+}
 
 
-def init_db():
+def init_db() -> None:
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS quota (
-            ip   TEXT,
+            ip TEXT,
             date TEXT,
             count INTEGER DEFAULT 0,
             PRIMARY KEY (ip, date)
         )
-    """)
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -59,11 +80,14 @@ def check_and_use_quota(ip: str) -> int:
     current = row[0] if row else 0
     if current >= DAILY_LIMIT:
         conn.close()
-        raise HTTPException(status_code=429, detail="일일 사용 한도 초과 (2회/일)")
+        raise HTTPException(status_code=429, detail=f"Daily AI usage limit exceeded ({DAILY_LIMIT}/day)")
+
     new_count = current + 1
     conn.execute(
-        """INSERT INTO quota (ip, date, count) VALUES (?, ?, ?)
-           ON CONFLICT(ip, date) DO UPDATE SET count=excluded.count""",
+        """
+        INSERT INTO quota (ip, date, count) VALUES (?, ?, ?)
+        ON CONFLICT(ip, date) DO UPDATE SET count=excluded.count
+        """,
         (ip, today, new_count),
     )
     conn.commit()
@@ -75,7 +99,7 @@ def detect_column_type(series: pd.Series) -> str:
     if pd.api.types.is_numeric_dtype(series):
         return "numeric"
     try:
-        pd.to_datetime(series.dropna().head(20), infer_datetime_format=True)
+        pd.to_datetime(series.dropna().head(20))
         return "date"
     except Exception:
         return "categorical"
@@ -83,13 +107,62 @@ def detect_column_type(series: pd.Series) -> str:
 
 def parse_file(file_bytes: bytes, filename: str) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail=f"{filename} is empty")
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"{filename} exceeds the {MAX_UPLOAD_BYTES} byte upload limit")
+
     if ext == "csv":
-        return pd.read_csv(io.BytesIO(file_bytes))
+        df = pd.read_csv(io.BytesIO(file_bytes))
     elif ext in ("xlsx", "xls"):
-        return pd.read_excel(io.BytesIO(file_bytes))
+        df = pd.read_excel(io.BytesIO(file_bytes))
     elif ext == "json":
-        return pd.read_json(io.BytesIO(file_bytes))
-    raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식 (CSV, Excel, JSON만 가능)")
+        df = pd.read_json(io.BytesIO(file_bytes))
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file format. Use CSV, Excel, or JSON.")
+
+    if df.empty:
+        raise HTTPException(status_code=400, detail=f"{filename} does not contain any rows")
+
+    for col in df.columns:
+        if df[col].dtype == object:
+            try:
+                cleaned = df[col].astype(str).str.replace(",", "").str.strip()
+                df[col] = pd.to_numeric(cleaned, errors="raise")
+            except Exception:
+                pass
+    return df
+
+
+async def load_uploaded_dataframe(files: List[UploadFile]) -> pd.DataFrame:
+    if not files:
+        raise HTTPException(status_code=400, detail="No files were uploaded")
+    if len(files) > MAX_FILES:
+        raise HTTPException(status_code=400, detail=f"Upload at most {MAX_FILES} files at once")
+
+    dfs = []
+    for file in files:
+        content = await file.read()
+        try:
+            dfs.append(parse_file(content, file.filename or "upload.csv"))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not parse {file.filename}: {e}")
+
+    if len(dfs) == 1:
+        df = dfs[0]
+    else:
+        first_cols = set(dfs[0].columns)
+        all_same_cols = all(set(d.columns) == first_cols for d in dfs[1:])
+        if all_same_cols:
+            df = pd.concat(dfs, ignore_index=True)
+        else:
+            df = pd.concat(dfs, axis=1)
+            df = df.loc[:, ~df.columns.duplicated()].copy()
+
+    df.columns = df.columns.astype(str)
+    return df
 
 
 def build_summary(df: pd.DataFrame) -> dict:
@@ -110,16 +183,189 @@ def build_summary(df: pd.DataFrame) -> dict:
 
 
 def clean_json_response(text: str) -> str:
+    import re
+
     text = text.strip()
-    if text.startswith("```"):
-        parts = text.split("```")
-        text = parts[1] if len(parts) > 1 else text
-        if text.startswith("json"):
-            text = text[4:]
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    start_idx = text.find("{")
+    start_list = text.find("[")
+    if start_idx == -1 and start_list != -1:
+        start = start_list
+    elif start_list == -1 and start_idx != -1:
+        start = start_idx
+    elif start_idx != -1 and start_list != -1:
+        start = min(start_idx, start_list)
+    else:
+        start = 0
+
+    end_idx = text.rfind("}")
+    end_list = text.rfind("]")
+    if end_idx == -1 and end_list != -1:
+        end = end_list
+    elif end_list == -1 and end_idx != -1:
+        end = end_idx
+    elif end_idx != -1 and end_list != -1:
+        end = max(end_idx, end_list)
+    else:
+        end = len(text) - 1
+
+    if start != -1 and end != -1 and end >= start:
+        text = text[start:end + 1]
     return text.strip()
 
 
-# ── API Endpoints ──────────────────────────────────────────────
+def normalize_recommendations(raw: Any, summary: dict) -> list[dict]:
+    if isinstance(raw, dict) and isinstance(raw.get("charts"), list):
+        raw = raw["charts"]
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=500, detail="Gemini response must be a JSON array")
+
+    columns = set(summary["columns"].keys())
+    numeric_columns = {
+        name for name, info in summary["columns"].items()
+        if info.get("type") == "numeric"
+    }
+    fallback_x = next(iter(columns), "")
+    fallback_y = [next(iter(numeric_columns), fallback_x)] if columns else []
+    normalized = []
+    seen_bar = False
+
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        chart_type = item.get("type")
+        if chart_type not in SUPPORTED_CHART_TYPES:
+            continue
+        if chart_type == "bar" and seen_bar:
+            continue
+        seen_bar = seen_bar or chart_type == "bar"
+
+        x_col = item.get("x") if item.get("x") in columns else fallback_x
+        y_raw = item.get("y", [])
+        y_cols = y_raw if isinstance(y_raw, list) else [y_raw]
+        y_cols = [col for col in y_cols if col in numeric_columns]
+        if not y_cols:
+            y_cols = fallback_y
+
+        normalized.append({
+            "type": chart_type,
+            "title": str(item.get("title") or f"{chart_type} chart"),
+            "x": x_col,
+            "y": y_cols,
+            "reason": str(item.get("reason") or ""),
+            "score": float(item.get("score") or 0),
+        })
+
+    if not normalized:
+        raise HTTPException(status_code=500, detail="Gemini did not return usable chart recommendations")
+    return sorted(normalized, key=lambda c: c["score"], reverse=True)
+
+
+def fallback_story(req: "StoryRequest", lang: str) -> dict:
+    columns = req.data_summary.get("columns", {}) if isinstance(req.data_summary, dict) else {}
+    rows = req.data_summary.get("rows", 0) if isinstance(req.data_summary, dict) else 0
+    y_columns = req.y_columns or []
+    first_y = y_columns[0] if y_columns else ""
+    metric = columns.get(first_y, {}) if isinstance(columns, dict) else {}
+    mean_value = metric.get("mean")
+    max_value = metric.get("max")
+
+    if lang == "Vietnamese":
+        story = f"Bieu do {req.title} tom tat {rows} dong du lieu theo truc {req.x_column}."
+        if first_y and mean_value is not None:
+            story += f" Chi so {first_y} co gia tri trung binh khoang {mean_value} va muc cao nhat {max_value}."
+        recommendation = "Nen kiem tra cac nhom co gia tri cao nhat va so sanh voi xu huong theo thoi gian neu co cot ngay."
+        roadmap = "1. Lam sach du lieu. 2. So sanh cac nhom chinh. 3. Theo doi chi so bat thuong. 4. Cap nhat bao cao dinh ky."
+        report = "Bao cao tam thoi duoc tao bang thong ke cuc bo vi AI dang ban hoac khong tra ve JSON hop le."
+    elif lang == "Korean":
+        story = f"{req.title} chart summarizes {rows} rows by {req.x_column}."
+        if first_y and mean_value is not None:
+            story += f" The average value of {first_y} is about {mean_value}, with a maximum of {max_value}."
+        recommendation = "Review the highest groups first, then compare them with time trends if a date column exists."
+        roadmap = "1. Clean the data. 2. Compare major groups. 3. Track outliers. 4. Refresh the report regularly."
+        report = "This fallback report was generated locally because the AI service was unavailable or returned invalid JSON."
+    else:
+        story = f"The {req.title} chart summarizes {rows} rows by {req.x_column}."
+        if first_y and mean_value is not None:
+            story += f" The average value of {first_y} is about {mean_value}, with a maximum of {max_value}."
+        recommendation = "Review the highest groups first, then compare them with time trends if a date column exists."
+        roadmap = "1. Clean the data. 2. Compare major groups. 3. Track outliers. 4. Refresh the report regularly."
+        report = "This fallback report was generated locally because the AI service was unavailable or returned invalid JSON."
+
+    insights = []
+    if first_y and mean_value is not None:
+        insights.append({"label": f"Avg {first_y}", "value": str(mean_value), "type": "neutral"})
+    if first_y and max_value is not None:
+        insights.append({"label": f"Max {first_y}", "value": str(max_value), "type": "positive"})
+    insights.append({"label": "Rows", "value": str(rows), "type": "neutral"})
+
+    return {
+        "story": story,
+        "insights": insights[:3],
+        "recommendation": recommendation,
+        "roadmap": roadmap,
+        "report": report,
+        "fallback": True,
+    }
+
+
+def normalize_story_result(raw: Any, req: "StoryRequest", lang: str) -> dict:
+    if not isinstance(raw, dict):
+        return fallback_story(req, lang)
+
+    result = fallback_story(req, lang)
+    result.update({
+        "story": str(raw.get("story") or result["story"]),
+        "recommendation": str(raw.get("recommendation") or result["recommendation"]),
+        "roadmap": str(raw.get("roadmap") or result["roadmap"]),
+        "report": str(raw.get("report") or result["report"]),
+        "fallback": False,
+    })
+
+    insights = raw.get("insights")
+    if isinstance(insights, list) and insights:
+        cleaned = []
+        for item in insights[:3]:
+            if isinstance(item, dict):
+                cleaned.append({
+                    "label": str(item.get("label") or "Insight"),
+                    "value": str(item.get("value") or ""),
+                    "type": item.get("type") if item.get("type") in {"positive", "negative", "neutral"} else "neutral",
+                })
+        if cleaned:
+            result["insights"] = cleaned
+
+    return result
+
+
+def is_transient_gemini_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in ("503", "unavailable", "high demand", "rate limit", "temporarily"))
+
+
+def generate_gemini_content(prompt: str):
+    if not gemini_client:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
+
+    last_error: Exception | None = None
+    for model in GEMINI_MODELS:
+        for attempt in range(GEMINI_RETRIES_PER_MODEL):
+            try:
+                return gemini_client.models.generate_content(model=model, contents=prompt)
+            except Exception as e:
+                last_error = e
+                if not is_transient_gemini_error(e):
+                    raise
+                if attempt < GEMINI_RETRIES_PER_MODEL - 1:
+                    time.sleep(GEMINI_RETRY_DELAY_SECONDS * (attempt + 1))
+
+    raise HTTPException(
+        status_code=503,
+        detail=f"Gemini is temporarily unavailable after trying models: {', '.join(GEMINI_MODELS)}. Last error: {last_error}",
+    )
 
 
 @app.get("/")
@@ -132,71 +378,21 @@ async def root():
 
 @app.post("/api/upload")
 async def upload_file(files: List[UploadFile] = File(...)):
-    if not files:
-        raise HTTPException(status_code=400, detail="Không có file nào được tải lên")
-
-    dfs = []
-    for file in files:
-        content = await file.read()
-        try:
-            dfs.append(parse_file(content, file.filename or "upload.csv"))
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Lỗi đọc file {file.filename}: {e}")
-
-    if len(dfs) == 1:
-        df = dfs[0]
-    else:
-        first_cols = set(dfs[0].columns)
-        all_same_cols = all(set(d.columns) == first_cols for d in dfs[1:])
-        if all_same_cols:
-            df = pd.concat(dfs, ignore_index=True)
-        else:
-            df = pd.concat(dfs, axis=1)
-            df = df.loc[:, ~df.columns.duplicated()].copy()
-
-    df.columns = df.columns.astype(str)
-
+    df = await load_uploaded_dataframe(files)
     columns = [{"name": col, "type": detect_column_type(df[col])} for col in df.columns]
-    preview = df.head(5).replace({np.nan: None}).to_dict(orient="records")
+    preview = df.head(1000).replace({np.nan: None}).to_dict(orient="records")
     summary = build_summary(df)
-
     return {"columns": columns, "preview": preview, "summary": summary, "rows": len(df)}
 
 
 @app.post("/api/ai-recommend")
-async def ai_recommend(request: Request, files: List[UploadFile] = File(...), language: str = Form('ko')):
+async def ai_recommend(request: Request, files: List[UploadFile] = File(...), language: str = Form("ko")):
     ip = request.client.host if request.client else "unknown"
-
-    dfs = []
-    for file in files:
-        content = await file.read()
-        try:
-            dfs.append(parse_file(content, file.filename or "upload.csv"))
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Lỗi đọc file: {e}")
-
-    if len(dfs) == 1:
-        df = dfs[0]
-    else:
-        first_cols = set(dfs[0].columns)
-        all_same_cols = all(set(d.columns) == first_cols for d in dfs[1:])
-        if all_same_cols:
-            df = pd.concat(dfs, ignore_index=True)
-        else:
-            df = pd.concat(dfs, axis=1)
-            df = df.loc[:, ~df.columns.duplicated()].copy()
-
-    df.columns = df.columns.astype(str)
-
+    df = await load_uploaded_dataframe(files)
     remaining = check_and_use_quota(ip)
 
     summary = build_summary(df)
     sample = df.head(3).replace({np.nan: None}).to_dict(orient="records")
-
     lang_name = "Vietnamese" if language == "vi" else ("Korean" if language == "ko" else "English")
 
     prompt = f"""You are a data visualization expert.
@@ -208,37 +404,37 @@ Dataset info:
 - Sample (3 rows): {json.dumps(sample, ensure_ascii=False, default=str)}
 
 Guidelines:
-- ONLY use chart types from this supported list: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea
-- For each recommendation, provide a score from 0.0 to 1.0 indicating suitability
-- Sort by score descending (highest first)
-- First recommendation should be the most optimal chart for this data
-- Choose x as the most meaningful category/date column, y as one or more numeric columns
-- Write the "reason" field in {lang_name}
+- ONLY use chart types from this supported list: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea, horizontalBar, stackedBar, combo, histogram
+- LIMIT the use of the "bar" chart. Do not recommend the "bar" chart more than once per response. Provide a diverse mix of chart types.
+- Prefer horizontalBar for long category labels, stackedBar for comparing multiple numeric series across categories, combo for mixing totals and trends, and histogram for showing the distribution of one numeric column.
+- For each recommendation, provide a score from 0.0 to 1.0 indicating suitability.
+- Sort by score descending.
+- Choose x as a real column name from the dataset.
+- Choose y as one or more real numeric column names from the dataset.
+- Write the "reason" field in {lang_name}.
 
-Return ONLY a valid JSON array (no markdown fences, no explanation):
+Return ONLY a valid JSON array:
 [
   {{
-    "type": "one of: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea",
+    "type": "one of: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea, horizontalBar, stackedBar, combo, histogram",
     "title": "descriptive chart title",
     "x": "x-axis column name",
     "y": ["column1", "column2"],
-    "reason": "Why this chart is optimal for this data (2-3 sentences in {lang_name})",
+    "reason": "Why this chart is optimal for this data",
     "score": 0.95
   }}
 ]"""
 
-    if not gemini_client:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY가 설정되지 않았습니다.")
-
     try:
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash", contents=prompt
-        )
-        charts = json.loads(clean_json_response(response.text))
+        response = generate_gemini_content(prompt)
+        raw_charts = json.loads(clean_json_response(response.text))
+        charts = normalize_recommendations(raw_charts, summary)
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Gemini 응답 파싱 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"Could not parse Gemini JSON response: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
 
     return {"charts": charts, "remaining": remaining}
 
@@ -246,7 +442,7 @@ Return ONLY a valid JSON array (no markdown fences, no explanation):
 class StoryRequest(BaseModel):
     chart_type: str
     x_column: str
-    y_columns: List[str]  # multiple Y columns
+    y_columns: List[str]
     title: str
     data_summary: dict
     sample_data: list
@@ -259,12 +455,12 @@ async def storytelling(req: StoryRequest):
 
     prompt = f"""You are a data storytelling expert. Respond entirely in {lang}.
 
-Chart: {req.chart_type} — {req.title}
+Chart: {req.chart_type} - {req.title}
 X-axis: {req.x_column} | Y-axes: {', '.join(req.y_columns)}
 Data summary: {json.dumps(req.data_summary, ensure_ascii=False, default=str)}
 Sample data: {json.dumps(req.sample_data, ensure_ascii=False, default=str)}
 
-Return ONLY a valid JSON object (no markdown fences):
+Return ONLY a valid JSON object:
 {{
   "story": "2-3 sentence narrative insight about the data",
   "insights": [
@@ -277,23 +473,25 @@ Return ONLY a valid JSON object (no markdown fences):
   "report": "A comprehensive report summary including key findings, trends, and future implications"
 }}"""
 
-    if not gemini_client:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY가 설정되지 않았습니다.")
-
     try:
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash", contents=prompt
-        )
-        result = json.loads(clean_json_response(response.text))
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Gemini 응답 파싱 오류: {e}")
+        response = generate_gemini_content(prompt)
+        result = normalize_story_result(json.loads(clean_json_response(response.text)), req, lang)
+    except json.JSONDecodeError:
+        result = fallback_story(req, lang)
+    except HTTPException as e:
+        if e.status_code == 503:
+            result = fallback_story(req, lang)
+        else:
+            raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API 오류: {e}")
+        if is_transient_gemini_error(e):
+            result = fallback_story(req, lang)
+        else:
+            raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
 
     return result
 
 
-# ── Serve React Frontend (production build) ────────────────────
 FRONTEND_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
 
 if FRONTEND_DIST.exists():
@@ -301,7 +499,10 @@ if FRONTEND_DIST.exists():
 
     @app.get("/favicon.ico", include_in_schema=False)
     async def favicon():
-        return FileResponse(FRONTEND_DIST / "favicon.ico")
+        favicon_path = FRONTEND_DIST / "favicon.ico"
+        if favicon_path.exists():
+            return FileResponse(favicon_path)
+        raise HTTPException(status_code=404, detail="favicon.ico not found")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):

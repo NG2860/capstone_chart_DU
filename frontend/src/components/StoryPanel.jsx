@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
 
-const API = ''  // Vite proxy
+const API = import.meta.env.VITE_API_BASE_URL || ''
 
 const INSIGHT_COLORS = {
   positive: { bg: '#E1F5EE', text: '#085041', border: '#9FE1CB' },
@@ -98,7 +98,7 @@ export default function StoryPanel({
       setStory(res.data)
       if (onStoryGenerated) onStoryGenerated(res.data)
     } catch (e) {
-      setError(t.error)
+      setError(e.response?.data?.detail || e.message || t.error)
     } finally {
       setLoading(false)
     }
@@ -186,7 +186,7 @@ export default function StoryPanel({
 
           {/* Insight cards */}
           <div style={{ display: 'flex', gap: 6 }}>
-            {story.insights.map((ins, i) => {
+            {(story.insights || []).map((ins, i) => {
               const c = INSIGHT_COLORS[ins.type] || INSIGHT_COLORS.neutral
               return (
                 <div key={i} style={{
