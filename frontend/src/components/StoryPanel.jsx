@@ -98,7 +98,7 @@ export default function StoryPanel({
       setStory(res.data)
       if (onStoryGenerated) onStoryGenerated(res.data)
     } catch (e) {
-      setError(t.error)
+      setError(e.response?.data?.detail || e.message || t.error)
     } finally {
       setLoading(false)
     }
@@ -186,7 +186,7 @@ export default function StoryPanel({
 
           {/* Insight cards */}
           <div style={{ display: 'flex', gap: 6 }}>
-            {story.insights.map((ins, i) => {
+            {(story.insights || []).map((ins, i) => {
               const c = INSIGHT_COLORS[ins.type] || INSIGHT_COLORS.neutral
               return (
                 <div key={i} style={{

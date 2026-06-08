@@ -5,7 +5,10 @@ Chart.register(...registerables)
 
 const PALETTE = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40']
 
-const SUPPORTED_CHART_TYPES = ['bar', 'line', 'area', 'pie', 'doughnut', 'radar', 'polarArea', 'scatter', 'bubble']
+const SUPPORTED_CHART_TYPES = [
+  'bar', 'line', 'area', 'pie', 'doughnut', 'radar', 'polarArea', 'scatter', 'bubble',
+  'horizontalBar', 'stackedBar', 'combo', 'histogram',
+]
 
 function AiChartCard({ chart, preview, index, onApply }) {
   const canvasRef = useRef(null)
@@ -38,6 +41,7 @@ function AiChartCard({ chart, preview, index, onApply }) {
       },
       options: {
         responsive: true,
+        indexAxis: chartData.indexAxis,
         plugins: {
           legend: { display: ['pie', 'doughnut', 'polarArea'].includes(chart.type), labels: { font: { size: 9 }, boxWidth: 10 } },
         },

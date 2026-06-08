@@ -15,6 +15,13 @@ const CHART_TYPES = [
   { value: 'polarArea', label: '극좌표' },
 ]
 
+const AI_CHART_TYPES = [
+  { value: 'horizontalBar', label: 'Horizontal' },
+  { value: 'stackedBar',    label: 'Stacked' },
+  { value: 'combo',         label: 'Combo' },
+  { value: 'histogram',     label: 'Histogram' },
+]
+
 const PALETTE = [
   '#534AB7', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#FF9F40', '#9966FF', '#C9CBCF',
 ]
@@ -77,6 +84,7 @@ export default function ManualChart({ columns, preview = [], config, onConfigCha
       },
       options: {
         responsive: true,
+        indexAxis: chartData.indexAxis,
         plugins: {
           legend: { display: yAxes.length > 1 || ['pie', 'doughnut', 'polarArea'].includes(type), position: 'top',
                     labels: { font: { size: 10 }, boxWidth: 10 } },
@@ -95,7 +103,7 @@ export default function ManualChart({ columns, preview = [], config, onConfigCha
 
       {/* chart type buttons */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-        {CHART_TYPES.map(t => (
+        {[...CHART_TYPES, ...AI_CHART_TYPES].map(t => (
           <button key={t.value} onClick={() => setType(t.value)}
             style={{
               flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6,

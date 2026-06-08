@@ -46,7 +46,10 @@ DAILY_LIMIT = int(os.getenv("DAILY_LIMIT", "1000"))
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 MAX_FILES = int(os.getenv("MAX_FILES", "5"))
 DB_PATH = os.path.join(os.path.dirname(__file__), "quota.db")
-SUPPORTED_CHART_TYPES = {"bar", "line", "area", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea"}
+SUPPORTED_CHART_TYPES = {
+    "bar", "line", "area", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea",
+    "horizontalBar", "stackedBar", "combo", "histogram",
+}
 
 
 def init_db() -> None:
@@ -261,6 +264,83 @@ def normalize_recommendations(raw: Any, summary: dict) -> list[dict]:
     return sorted(normalized, key=lambda c: c["score"], reverse=True)
 
 
+def fallback_story(req: "StoryRequest", lang: str) -> dict:
+    columns = req.data_summary.get("columns", {}) if isinstance(req.data_summary, dict) else {}
+    rows = req.data_summary.get("rows", 0) if isinstance(req.data_summary, dict) else 0
+    y_columns = req.y_columns or []
+    first_y = y_columns[0] if y_columns else ""
+    metric = columns.get(first_y, {}) if isinstance(columns, dict) else {}
+    mean_value = metric.get("mean")
+    max_value = metric.get("max")
+
+    if lang == "Vietnamese":
+        story = f"Bieu do {req.title} tom tat {rows} dong du lieu theo truc {req.x_column}."
+        if first_y and mean_value is not None:
+            story += f" Chi so {first_y} co gia tri trung binh khoang {mean_value} va muc cao nhat {max_value}."
+        recommendation = "Nen kiem tra cac nhom co gia tri cao nhat va so sanh voi xu huong theo thoi gian neu co cot ngay."
+        roadmap = "1. Lam sach du lieu. 2. So sanh cac nhom chinh. 3. Theo doi chi so bat thuong. 4. Cap nhat bao cao dinh ky."
+        report = "Bao cao tam thoi duoc tao bang thong ke cuc bo vi AI dang ban hoac khong tra ve JSON hop le."
+    elif lang == "Korean":
+        story = f"{req.title} chart summarizes {rows} rows by {req.x_column}."
+        if first_y and mean_value is not None:
+            story += f" The average value of {first_y} is about {mean_value}, with a maximum of {max_value}."
+        recommendation = "Review the highest groups first, then compare them with time trends if a date column exists."
+        roadmap = "1. Clean the data. 2. Compare major groups. 3. Track outliers. 4. Refresh the report regularly."
+        report = "This fallback report was generated locally because the AI service was unavailable or returned invalid JSON."
+    else:
+        story = f"The {req.title} chart summarizes {rows} rows by {req.x_column}."
+        if first_y and mean_value is not None:
+            story += f" The average value of {first_y} is about {mean_value}, with a maximum of {max_value}."
+        recommendation = "Review the highest groups first, then compare them with time trends if a date column exists."
+        roadmap = "1. Clean the data. 2. Compare major groups. 3. Track outliers. 4. Refresh the report regularly."
+        report = "This fallback report was generated locally because the AI service was unavailable or returned invalid JSON."
+
+    insights = []
+    if first_y and mean_value is not None:
+        insights.append({"label": f"Avg {first_y}", "value": str(mean_value), "type": "neutral"})
+    if first_y and max_value is not None:
+        insights.append({"label": f"Max {first_y}", "value": str(max_value), "type": "positive"})
+    insights.append({"label": "Rows", "value": str(rows), "type": "neutral"})
+
+    return {
+        "story": story,
+        "insights": insights[:3],
+        "recommendation": recommendation,
+        "roadmap": roadmap,
+        "report": report,
+        "fallback": True,
+    }
+
+
+def normalize_story_result(raw: Any, req: "StoryRequest", lang: str) -> dict:
+    if not isinstance(raw, dict):
+        return fallback_story(req, lang)
+
+    result = fallback_story(req, lang)
+    result.update({
+        "story": str(raw.get("story") or result["story"]),
+        "recommendation": str(raw.get("recommendation") or result["recommendation"]),
+        "roadmap": str(raw.get("roadmap") or result["roadmap"]),
+        "report": str(raw.get("report") or result["report"]),
+        "fallback": False,
+    })
+
+    insights = raw.get("insights")
+    if isinstance(insights, list) and insights:
+        cleaned = []
+        for item in insights[:3]:
+            if isinstance(item, dict):
+                cleaned.append({
+                    "label": str(item.get("label") or "Insight"),
+                    "value": str(item.get("value") or ""),
+                    "type": item.get("type") if item.get("type") in {"positive", "negative", "neutral"} else "neutral",
+                })
+        if cleaned:
+            result["insights"] = cleaned
+
+    return result
+
+
 def is_transient_gemini_error(exc: Exception) -> bool:
     text = str(exc).lower()
     return any(marker in text for marker in ("503", "unavailable", "high demand", "rate limit", "temporarily"))
@@ -324,8 +404,9 @@ Dataset info:
 - Sample (3 rows): {json.dumps(sample, ensure_ascii=False, default=str)}
 
 Guidelines:
-- ONLY use chart types from this supported list: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea
+- ONLY use chart types from this supported list: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea, horizontalBar, stackedBar, combo, histogram
 - LIMIT the use of the "bar" chart. Do not recommend the "bar" chart more than once per response. Provide a diverse mix of chart types.
+- Prefer horizontalBar for long category labels, stackedBar for comparing multiple numeric series across categories, combo for mixing totals and trends, and histogram for showing the distribution of one numeric column.
 - For each recommendation, provide a score from 0.0 to 1.0 indicating suitability.
 - Sort by score descending.
 - Choose x as a real column name from the dataset.
@@ -335,7 +416,7 @@ Guidelines:
 Return ONLY a valid JSON array:
 [
   {{
-    "type": "one of: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea",
+    "type": "one of: bar, line, area, pie, doughnut, scatter, bubble, radar, polarArea, horizontalBar, stackedBar, combo, histogram",
     "title": "descriptive chart title",
     "x": "x-axis column name",
     "y": ["column1", "column2"],
@@ -394,11 +475,19 @@ Return ONLY a valid JSON object:
 
     try:
         response = generate_gemini_content(prompt)
-        result = json.loads(clean_json_response(response.text))
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Could not parse Gemini JSON response: {e}")
+        result = normalize_story_result(json.loads(clean_json_response(response.text)), req, lang)
+    except json.JSONDecodeError:
+        result = fallback_story(req, lang)
+    except HTTPException as e:
+        if e.status_code == 503:
+            result = fallback_story(req, lang)
+        else:
+            raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
+        if is_transient_gemini_error(e):
+            result = fallback_story(req, lang)
+        else:
+            raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
 
     return result
 
